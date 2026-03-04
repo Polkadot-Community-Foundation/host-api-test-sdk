@@ -1,7 +1,12 @@
 {
-  "name": "@novasamatech/test-host",
+  "name": "@parity/host-api-test-sdk",
   "version": "0.1.0",
-  "description": "Lightweight test host for Spektr product E2E testing",
+  "description": "Lightweight test host for Spektr product E2E testing — embeds dapps with auto-signing dev accounts, no Docker needed",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paritytech/host-api-test-sdk.git"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -19,8 +24,10 @@
   "scripts": {
     "build:bundle": "node build.mjs",
     "build:tsc": "tsc",
-    "build": "npm run build:bundle && npm run build:tsc",
-    "clean": "rm -rf dist"
+    "build": "pnpm run build:bundle && pnpm run build:tsc",
+    "clean": "rm -rf dist",
+    "test": "node smoke-test.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.0.0"
@@ -42,10 +49,5 @@
     "neverthrow": "^8.0.0",
     "polkadot-api": "^1.0.0",
     "typescript": "^5"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }
