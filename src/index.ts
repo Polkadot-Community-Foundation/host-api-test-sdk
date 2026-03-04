@@ -7,6 +7,7 @@ export {
   PREVIEWNET_ASSET_HUB,
   SUPPORTED_CHAINS,
 } from './chains.js';
+export { parseEnvFile, loadEnvFiles, loadChainFromEnv } from './env.js';
 export type {
   ChainConfig,
   CreateTestHostOptions,
@@ -16,3 +17,4 @@ export type {
   SigningLogEntry,
   TestHostServer,
 } from './types.js';
+export type { LoadChainFromEnvOptions } from './env.js';

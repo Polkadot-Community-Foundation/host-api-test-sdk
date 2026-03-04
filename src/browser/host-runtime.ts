@@ -75,6 +75,12 @@ const pairsByUri = new Map<string, KeyringPair>();
 
 // ── Helpers ────────────────────────────────────────────────────────
 
+/** Normalize a genesis hash for comparison — handles different types and casing */
+function normalizeHash(value: unknown): string {
+  const str = String(value).toLowerCase().trim();
+  return str.startsWith('0x') ? str : `0x${str}`;
+}
+
 function getPair(uri: string): KeyringPair {
   let pair = pairsByUri.get(uri);
   if (!pair) {
@@ -120,7 +126,17 @@ function setupContainer(
 
   container.handleFeatureSupported((params, { ok }) => {
     if (params.tag === 'Chain') {
-      const supported = params.value === chainConfig.genesisHash;
+      const requested = normalizeHash(params.value);
+      const configured = normalizeHash(chainConfig.genesisHash);
+      const supported = requested === configured;
+      if (!supported) {
+        console.warn(
+          `[test-host] Chain feature check MISMATCH:\n` +
+          `  requested: ${String(params.value)} (type: ${typeof params.value})\n` +
+          `  configured: ${chainConfig.genesisHash}\n` +
+          `  normalized: ${requested} vs ${configured}`,
+        );
+      }
       return ok(supported);
     }
     return ok(false);
@@ -133,7 +149,10 @@ function setupContainer(
   chainStatus = 'connected';
 
   container.handleChainConnection((requestedGenesisHash) => {
-    if (requestedGenesisHash === chainConfig.genesisHash) {
+    const requested = normalizeHash(requestedGenesisHash);
+    const configured = normalizeHash(chainConfig.genesisHash);
+    if (requested === configured) {
+      console.log('[test-host] Chain connection established for', chainConfig.name);
       return chainProvider;
     }
     console.warn('[test-host] Unsupported chain requested:', requestedGenesisHash);
@@ -322,7 +341,12 @@ async function init(): Promise<void> {
     },
   };
 
-  console.log('[test-host] Initialized with accounts:', config.accounts.map(a => a.name));
+  console.log(
+    '[test-host] Initialized:',
+    '\n  chain:', config.chain.name, '(' + config.chain.genesisHash.slice(0, 18) + '...)',
+    '\n  rpc:', config.chain.rpcUrl,
+    '\n  accounts:', config.accounts.map(a => a.name).join(', '),
+  );
 }
 
 init().catch((err) => {
