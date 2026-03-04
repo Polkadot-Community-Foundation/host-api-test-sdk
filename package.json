@@ -1,0 +1,51 @@
+{
+  "name": "@novasamatech/test-host",
+  "version": "0.1.0",
+  "description": "Lightweight test host for Spektr product E2E testing",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./playwright": {
+      "import": "./dist/playwright/index.js",
+      "types": "./dist/playwright/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:bundle": "node build.mjs",
+    "build:tsc": "tsc",
+    "build": "npm run build:bundle && npm run build:tsc",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "@playwright/test": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@novasamatech/host-api": "0.6.1",
+    "@novasamatech/host-container": "0.6.1",
+    "@polkadot/keyring": "^14.0.0",
+    "@polkadot/types": "^16.0.0",
+    "@polkadot/util": "^14.0.0",
+    "@polkadot/util-crypto": "^14.0.0",
+    "@types/node": "^20",
+    "esbuild": "^0.25.0",
+    "neverthrow": "^8.0.0",
+    "polkadot-api": "^1.0.0",
+    "typescript": "^5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
