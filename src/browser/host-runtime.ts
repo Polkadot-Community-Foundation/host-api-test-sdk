@@ -195,14 +195,18 @@ function setupContainer(
           params,
           { version: params.version },
         );
+
+        // extrinsicPayload.sign() returns { signature: HexString } — already hex-encoded.
+        // Do NOT apply u8aToHex() again (that would double-encode).
         const { signature } = extrinsicPayload.sign(pair);
         return {
-          signature: u8aToHex(signature) as `0x${string}`,
+          signature: signature as `0x${string}`,
           signedTransaction: undefined,
         };
       })(),
       (e) => {
         const msg = e instanceof Error ? e.message : String(e);
+        console.error('[test-host] Sign error:', msg);
         return new SigningErr.Unknown({ reason: msg });
       },
     );
