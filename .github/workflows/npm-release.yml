@@ -18,6 +18,12 @@ jobs:
         with:
           version: 10
 
+      - name: Set version from release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Publishing version: $VERSION"
+          npm pkg set version="$VERSION"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
