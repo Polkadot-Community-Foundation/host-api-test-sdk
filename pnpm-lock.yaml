@@ -13,11 +13,11 @@ importers:
         version: 1.58.2
     devDependencies:
       '@novasamatech/host-api':
-        specifier: 0.6.1
-        version: 0.6.1
+        specifier: 0.6.6-1
+        version: 0.6.6-1
       '@novasamatech/host-container':
-        specifier: 0.6.1
-        version: 0.6.1
+        specifier: 0.6.6-1
+        version: 0.6.6-1
       '@polkadot/keyring':
         specifier: ^14.0.0
         version: 14.0.1(@polkadot/util-crypto@14.0.1(@polkadot/util@14.0.1))(@polkadot/util@14.0.1)
@@ -242,14 +242,14 @@ packages:
     resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
     engines: {node: '>= 20.19.0'}
 
-  '@novasamatech/host-api@0.6.1':
-    resolution: {integrity: sha512-N6wzdWqOYCNKwomu2vU5ZDzKJsTtzVPZjW25jA3WL5oSGg5137q5Gv7vMbZDDJ19rcAj3Dpp3+SV7FZtmiTJUw==}
+  '@novasamatech/host-api@0.6.6-1':
+    resolution: {integrity: sha512-OVIio8iYkDI/eRN+KBOSVnOYplm8PRxGNTDa/Jp/wuIh5HV+TwgKkCpfSjQIiEeSvFT2x9DXVXEDPdFgpkx6yA==}
 
-  '@novasamatech/host-container@0.6.1':
-    resolution: {integrity: sha512-2cf/P8yfqNgoQNus+/mDC6TKaT288KQzyUGWaJe7cknB9MY2k90/flZEHN5OPvDzpJBq98F2Difdd+nvQqW4XA==}
+  '@novasamatech/host-container@0.6.6-1':
+    resolution: {integrity: sha512-1OOR5clqB6THrBHN0V2rFHvHGLieIMFxBR5I1R08nQImvBA71JYIyJ72/dlGmZ5VLB01/4kUiWzj/cYvZCOZ6w==}
 
-  '@novasamatech/scale@0.6.1':
-    resolution: {integrity: sha512-o6qdn7NAGuRX6iBVQanEEaX7oJhavV4xmi9whFTrUEZ0WX1JMnhA1gyQrtDU0Qr9gsNOTDMhOY3/8WxolME9ig==}
+  '@novasamatech/scale@0.6.6-1':
+    resolution: {integrity: sha512-The9wG4cn4q8Q7CZ9PSsjkekWhu6eJYdpL2g3xUksjtC/SnT5CUYFBXJT+fIg8PBnurB8MUlpatzQB/wF/DFtg==}
 
   '@playwright/test@1.58.2':
     resolution: {integrity: sha512-akea+6bHYBBfA9uQqSYmlJXn61cTa+jbO87xVLCWbTqbWadRVmhxlXATaOjOgcBaWU4ePo0wB41KMFv3o35IXA==}
@@ -1284,23 +1284,23 @@ snapshots:
 
   '@noble/hashes@2.0.1': {}
 
-  '@novasamatech/host-api@0.6.1':
+  '@novasamatech/host-api@0.6.6-1':
     dependencies:
-      '@novasamatech/scale': 0.6.1
+      '@novasamatech/scale': 0.6.6-1
       '@polkadot-api/utils': 0.2.0
       nanoevents: 9.1.0
       nanoid: 5.1.6
       neverthrow: 8.2.0
       scale-ts: 1.6.1
 
-  '@novasamatech/host-container@0.6.1':
+  '@novasamatech/host-container@0.6.6-1':
     dependencies:
-      '@novasamatech/host-api': 0.6.1
+      '@novasamatech/host-api': 0.6.6-1
       '@polkadot-api/json-rpc-provider': 0.0.4
       '@polkadot-api/utils': 0.2.0
       nanoid: 5.1.6
 
-  '@novasamatech/scale@0.6.1':
+  '@novasamatech/scale@0.6.6-1':
     dependencies:
       '@polkadot-api/utils': 0.2.0
       scale-ts: 1.6.1
