@@ -94,7 +94,12 @@ function getPairByAddress(address: string): KeyringPair | undefined {
   for (const pair of pairsByUri.values()) {
     if (pair.address === address) return pair;
   }
-  // Try matching by public key (address might be in different SS58 format)
+  // Try matching by public key hex (product-sdk sends 0x + hex(publicKey))
+  const normalized = address.toLowerCase();
+  for (const pair of pairsByUri.values()) {
+    if (u8aToHex(pair.publicKey).toLowerCase() === normalized) return pair;
+  }
+  // Try matching by SS58 re-encoding (address might be in different SS58 format)
   for (const pair of pairsByUri.values()) {
     try {
       if (keyring.encodeAddress(pair.publicKey) === address) return pair;
