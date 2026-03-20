@@ -9,16 +9,18 @@
  * Exposes window.__TEST_HOST__ for Playwright control.
  */
 
-import { createContainer, createIframeProvider } from '@novasamatech/host-container';
-import type { Container } from '@novasamatech/host-container';
 import { SigningErr } from '@novasamatech/host-api';
-import { getWsProvider } from 'polkadot-api/ws-provider';
+import type { Container } from '@novasamatech/host-container';
+import { createContainer, createIframeProvider } from '@novasamatech/host-container';
 import { Keyring } from '@polkadot/keyring';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { TypeRegistry } from '@polkadot/types';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { u8aToHex } from '@polkadot/util';
+import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { ResultAsync } from 'neverthrow';
+import { getWsProvider } from 'polkadot-api/ws-provider';
+
+import type { SigningLogEntry, TestHostAPI } from '../types.js';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -37,22 +39,6 @@ interface HostConfig {
   productUrl: string;
   accounts: AccountConfig[];
   chain: ChainRuntimeConfig;
-}
-
-interface SigningLogEntry {
-  type: 'payload' | 'raw';
-  payload: unknown;
-  timestamp: number;
-}
-
-interface TestHostAPI {
-  switchAccount(name: string): Promise<void>;
-  setAccounts(names: string[]): Promise<void>;
-  getSigningLog(): SigningLogEntry[];
-  clearSigningLog(): void;
-  getConnectionStatus(): string;
-  getChainStatus(): string;
-  dispose(): void;
 }
 
 // ── Globals ────────────────────────────────────────────────────────
@@ -149,14 +135,14 @@ function setupContainer(
 
   // ── Chain connection ─────────────────────────────────────────
 
-  chainStatus = 'connecting';
+  chainStatus = 'idle';
   const chainProvider = getWsProvider(chainConfig.rpcUrl);
-  chainStatus = 'connected';
 
   container.handleChainConnection((requestedGenesisHash) => {
     const requested = normalizeHash(requestedGenesisHash);
     const configured = normalizeHash(chainConfig.genesisHash);
     if (requested === configured) {
+      chainStatus = 'connected';
       console.log('[test-host] Chain connection established for', chainConfig.name);
       return chainProvider;
     }

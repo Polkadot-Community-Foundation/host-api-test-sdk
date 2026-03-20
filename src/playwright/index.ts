@@ -9,8 +9,6 @@ export type {
   HexString,
   SigningLogEntry,
 } from '../types.js';
-export { loadChainFromEnv, parseEnvFile, loadEnvFiles } from '../env.js';
-export type { LoadChainFromEnvOptions } from '../env.js';
 export {
   DEFAULT_CHAIN,
   PASEO_ASSET_HUB,
