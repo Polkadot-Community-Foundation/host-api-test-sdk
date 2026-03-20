@@ -272,7 +272,12 @@ async function init(): Promise<void> {
   keyring = new Keyring({ type: 'sr25519', ss58Format: 42 });
 
   const iframe = document.getElementById('product-frame') as HTMLIFrameElement;
-  iframe.src = config.productUrl;
+  // Forward the host page's path/search/hash to the product iframe so that
+  // deep links like /n?id=...#key=... work when navigating via the test host URL.
+  iframe.src = new URL(
+    window.location.pathname + window.location.search + window.location.hash,
+    config.productUrl,
+  ).href;
 
   currentContainer = setupContainer(
     iframe,
