@@ -57,7 +57,7 @@ export function generateHostPage(config: HostPageConfig): string {
   </style>
 </head>
 <body>
-  <iframe id="product-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  <iframe id="product-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" allow="clipboard-read; clipboard-write"></iframe>
   <script>window.__TEST_HOST_CONFIG__ = ${safeConfigJson};</script>
   <script>${bundleScript}</script>
 </body>
