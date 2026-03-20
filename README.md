@@ -102,23 +102,20 @@ const server = await createTestHostServer({
 });
 ```
 
-For local networks where the genesis hash changes on each restart, load it from your project's env files:
+For local networks where the genesis hash changes on each restart, construct a `ChainConfig` directly:
 
 ```ts
-import {
-  createTestHostServer,
-  loadChainFromEnv,
-} from "@parity/host-api-test-sdk";
+import { createTestHostServer } from "@parity/host-api-test-sdk";
+import type { ChainConfig } from "@parity/host-api-test-sdk";
 
-const chain = loadChainFromEnv({
-  envFiles: [".env.local"],
-  chainId: "local-asset-hub",
-  chainName: "Local Asset Hub",
-  genesisHashKey: "VITE_GENESIS_HASH",
+const chain: ChainConfig = {
+  id: "local-asset-hub",
+  name: "Local Asset Hub",
+  genesisHash: process.env.GENESIS_HASH as `0x${string}`,
   rpcUrl: "ws://127.0.0.1:9944",
   tokenSymbol: "WND",
   tokenDecimals: 12,
-});
+};
 
 const server = await createTestHostServer({
   productUrl: "http://localhost:3000",
@@ -180,6 +177,27 @@ These are standard Substrate dev accounts (sr25519, ss58Format=42). Products may
 ## Account switching
 
 Product-sdk's `accounts.subscribe()` is one-shot. Changing accounts requires disposing the container and recreating it, which reloads the iframe. This matches how production hosts work. For multi-actor tests, prefer `setAccounts(['alice', 'bob'])` upfront and use the product's own account selector.
+
+## Migrating from 0.1.x to 0.2.x
+
+The env file utilities (`loadChainFromEnv`, `parseEnvFile`, `loadEnvFiles`) have been removed. If you used them, construct a `ChainConfig` directly:
+
+```diff
+-import { createTestHostServer, loadChainFromEnv } from "@parity/host-api-test-sdk";
+-const chain = loadChainFromEnv({ envFiles: [".env.local"], ... });
++import { createTestHostServer } from "@parity/host-api-test-sdk";
++import type { ChainConfig } from "@parity/host-api-test-sdk";
++const chain: ChainConfig = {
++  id: "local-asset-hub",
++  name: "Local Asset Hub",
++  genesisHash: process.env.GENESIS_HASH as `0x${string}`,
++  rpcUrl: "ws://127.0.0.1:9944",
++  tokenSymbol: "WND",
++  tokenDecimals: 12,
++};
+```
+
+If you only used built-in chains (`PASEO_ASSET_HUB`, etc.) and `createTestHostFixture` — no changes needed.
 
 ## License
 

@@ -1,12 +1,7 @@
 import type { Page, FrameLocator } from '@playwright/test';
 import { createTestHostServer } from '../server.js';
 import { DEFAULT_CHAIN } from '../chains.js';
-import type {
-  CreateTestHostOptions,
-  DevAccountName,
-  SigningLogEntry,
-  TestHostServer,
-} from '../types.js';
+import type { CreateTestHostOptions, DevAccountName, SigningLogEntry, TestHostAPI } from '../types.js';
 
 export interface TestHost {
   /** The host page (contains the iframe) */
@@ -100,14 +95,6 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
 // Augment Window type for Playwright evaluate calls
 declare global {
   interface Window {
-    __TEST_HOST__: {
-      switchAccount(name: string): Promise<void>;
-      setAccounts(names: string[]): Promise<void>;
-      getSigningLog(): SigningLogEntry[];
-      clearSigningLog(): void;
-      getConnectionStatus(): string;
-      getChainStatus(): string;
-      dispose(): void;
-    };
+    __TEST_HOST__: TestHostAPI;
   }
 }

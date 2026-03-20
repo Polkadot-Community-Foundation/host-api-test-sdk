@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { DevAccountName, ChainConfig } from './types.js';
 import { DEV_ACCOUNTS } from './accounts.js';
-import { DEFAULT_CHAIN } from './chains.js';
+import type { ChainConfig, DevAccountName } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

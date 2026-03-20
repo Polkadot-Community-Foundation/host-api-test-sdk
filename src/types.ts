@@ -1,4 +1,6 @@
-export type HexString = `0x${string}`;
+import type { HexString } from '@novasamatech/host-api';
+
+export type { HexString } from '@novasamatech/host-api';
 
 export interface ChainConfig {
   id: string;
@@ -38,4 +40,15 @@ export interface SigningLogEntry {
   type: 'payload' | 'raw';
   payload: unknown;
   timestamp: number;
+}
+
+/** Shape of window.__TEST_HOST__ — shared between browser bundle and Playwright fixture. */
+export interface TestHostAPI {
+  switchAccount(name: string): Promise<void>;
+  setAccounts(names: string[]): Promise<void>;
+  getSigningLog(): SigningLogEntry[];
+  clearSigningLog(): void;
+  getConnectionStatus(): string;
+  getChainStatus(): string;
+  dispose(): void;
 }
