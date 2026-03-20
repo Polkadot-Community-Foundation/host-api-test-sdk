@@ -20,6 +20,11 @@ export async function createTestHostServer(
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Length': Buffer.byteLength(html),
+      // Allow clipboard delegation to cross-origin iframes (Chrome 130+ enforcement).
+      // The 'allow' attribute on <iframe> can only delegate permissions the parent
+      // page itself has — without this header, clipboard-write is blocked for
+      // cross-origin iframes regardless of the iframe's 'allow' attribute.
+      'Permissions-Policy': 'clipboard-read=*, clipboard-write=*',
     });
     res.end(html);
   });
