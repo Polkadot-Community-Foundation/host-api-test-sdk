@@ -9,18 +9,21 @@
  * Exposes window.__TEST_HOST__ for Playwright control.
  */
 
-import { SigningErr } from '@novasamatech/host-api';
-import type { Container } from '@novasamatech/host-container';
-import { createContainer, createIframeProvider } from '@novasamatech/host-container';
-import { Keyring } from '@polkadot/keyring';
-import type { KeyringPair } from '@polkadot/keyring/types';
-import { TypeRegistry } from '@polkadot/types';
-import { u8aToHex } from '@polkadot/util';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { ResultAsync } from 'neverthrow';
-import { getWsProvider } from 'polkadot-api/ws-provider';
+import { SigningErr } from "@novasamatech/host-api";
+import type { Container } from "@novasamatech/host-container";
+import {
+  createContainer,
+  createIframeProvider,
+} from "@novasamatech/host-container";
+import { Keyring } from "@polkadot/keyring";
+import type { KeyringPair } from "@polkadot/keyring/types";
+import { TypeRegistry } from "@polkadot/types";
+import { u8aToHex } from "@polkadot/util";
+import { cryptoWaitReady } from "@polkadot/util-crypto";
+import { ResultAsync } from "neverthrow";
+import { getWsProvider } from "polkadot-api/ws-provider";
 
-import type { SigningLogEntry, TestHostAPI } from '../types.js';
+import type { SigningLogEntry, TestHostAPI } from "../types.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -53,8 +56,8 @@ declare global {
 // ── State ──────────────────────────────────────────────────────────
 
 const signingLog: SigningLogEntry[] = [];
-let connectionStatus = 'connecting';
-let chainStatus = 'connecting';
+let connectionStatus = "connecting";
+let chainStatus = "connecting";
 let currentContainer: Container | null = null;
 let keyring: Keyring;
 const pairsByUri = new Map<string, KeyringPair>();
@@ -64,7 +67,7 @@ const pairsByUri = new Map<string, KeyringPair>();
 /** Normalize a genesis hash for comparison — handles different types and casing */
 function normalizeHash(value: unknown): string {
   const str = String(value).toLowerCase().trim();
-  return str.startsWith('0x') ? str : `0x${str}`;
+  return str.startsWith("0x") ? str : `0x${str}`;
 }
 
 function getPair(uri: string): KeyringPair {
@@ -108,7 +111,7 @@ function setupContainer(
   const container = createContainer(provider);
 
   // Derive keypairs for all requested accounts
-  const pairs = accounts.map(acc => {
+  const pairs = accounts.map((acc) => {
     const pair = getPair(acc.uri);
     return { pair, name: acc.name };
   });
@@ -116,16 +119,16 @@ function setupContainer(
   // ── Feature support ──────────────────────────────────────────
 
   container.handleFeatureSupported((params, { ok }) => {
-    if (params.tag === 'Chain') {
+    if (params.tag === "Chain") {
       const requested = normalizeHash(params.value);
       const configured = normalizeHash(chainConfig.genesisHash);
       const supported = requested === configured;
       if (!supported) {
         console.warn(
           `[test-host] Chain feature check MISMATCH:\n` +
-          `  requested: ${String(params.value)} (type: ${typeof params.value})\n` +
-          `  configured: ${chainConfig.genesisHash}\n` +
-          `  normalized: ${requested} vs ${configured}`,
+            `  requested: ${String(params.value)} (type: ${typeof params.value})\n` +
+            `  configured: ${chainConfig.genesisHash}\n` +
+            `  normalized: ${requested} vs ${configured}`,
         );
       }
       return ok(supported);
@@ -135,18 +138,24 @@ function setupContainer(
 
   // ── Chain connection ─────────────────────────────────────────
 
-  chainStatus = 'idle';
+  chainStatus = "idle";
   const chainProvider = getWsProvider(chainConfig.rpcUrl);
 
   container.handleChainConnection((requestedGenesisHash) => {
     const requested = normalizeHash(requestedGenesisHash);
     const configured = normalizeHash(chainConfig.genesisHash);
     if (requested === configured) {
-      chainStatus = 'connected';
-      console.log('[test-host] Chain connection established for', chainConfig.name);
+      chainStatus = "connected";
+      console.log(
+        "[test-host] Chain connection established for",
+        chainConfig.name,
+      );
       return chainProvider;
     }
-    console.warn('[test-host] Unsupported chain requested:', requestedGenesisHash);
+    console.warn(
+      "[test-host] Unsupported chain requested:",
+      requestedGenesisHash,
+    );
     return null;
   });
 
@@ -162,7 +171,7 @@ function setupContainer(
   });
 
   container.handleAccountConnectionStatusSubscribe((_, send) => {
-    send(pairs.length > 0 ? 'connected' : 'disconnected');
+    send(pairs.length > 0 ? "connected" : "disconnected");
     // No dynamic updates — static test accounts
     return () => {};
   });
@@ -172,17 +181,25 @@ function setupContainer(
   container.handleSignPayload((params, { ok, err }) => {
     const pair = getPairByAddress(params.address);
     if (!pair) {
-      return err(new SigningErr.Unknown({ reason: `No keypair for address: ${params.address}` }));
+      return err(
+        new SigningErr.Unknown({
+          reason: `No keypair for address: ${params.address}`,
+        }),
+      );
     }
 
-    signingLog.push({ type: 'payload', payload: params, timestamp: Date.now() });
+    signingLog.push({
+      type: "payload",
+      payload: params,
+      timestamp: Date.now(),
+    });
 
     return ResultAsync.fromPromise(
       (async () => {
         const registry = new TypeRegistry();
         registry.setSignedExtensions(params.signedExtensions);
         const extrinsicPayload = registry.createType(
-          'ExtrinsicPayload',
+          "ExtrinsicPayload",
           params,
           { version: params.version },
         );
@@ -197,7 +214,7 @@ function setupContainer(
       })(),
       (e) => {
         const msg = e instanceof Error ? e.message : String(e);
-        console.error('[test-host] Sign error:', msg);
+        console.error("[test-host] Sign error:", msg);
         return new SigningErr.Unknown({ reason: msg });
       },
     );
@@ -208,13 +225,17 @@ function setupContainer(
   container.handleSignRaw((params, { ok, err }) => {
     const pair = getPairByAddress(params.address);
     if (!pair) {
-      return err(new SigningErr.Unknown({ reason: `No keypair for address: ${params.address}` }));
+      return err(
+        new SigningErr.Unknown({
+          reason: `No keypair for address: ${params.address}`,
+        }),
+      );
     }
 
-    signingLog.push({ type: 'raw', payload: params, timestamp: Date.now() });
+    signingLog.push({ type: "raw", payload: params, timestamp: Date.now() });
 
     let dataToSign: Uint8Array;
-    if (params.data.tag === 'Bytes') {
+    if (params.data.tag === "Bytes") {
       dataToSign = params.data.value;
     } else {
       // Payload string — encode as UTF-8 bytes
@@ -262,22 +283,16 @@ function setupContainer(
 async function init(): Promise<void> {
   const config = window.__TEST_HOST_CONFIG__;
   if (!config) {
-    console.error('[test-host] No __TEST_HOST_CONFIG__ found');
+    console.error("[test-host] No __TEST_HOST_CONFIG__ found");
     return;
   }
 
   // Wait for WASM crypto (sr25519 signing)
   await cryptoWaitReady();
 
-  keyring = new Keyring({ type: 'sr25519', ss58Format: 42 });
+  keyring = new Keyring({ type: "sr25519", ss58Format: 42 });
 
-  const iframe = document.getElementById('product-frame') as HTMLIFrameElement;
-  // Forward the host page's path/search/hash to the product iframe so that
-  // deep links like /n?id=...#key=... work when navigating via the test host URL.
-  iframe.src = new URL(
-    window.location.pathname + window.location.search + window.location.hash,
-    config.productUrl,
-  ).href;
+  const iframe = document.getElementById("product-frame") as HTMLIFrameElement;
 
   currentContainer = setupContainer(
     iframe,
@@ -285,6 +300,14 @@ async function init(): Promise<void> {
     config.accounts,
     config.chain,
   );
+
+  // Forward the host page's path/search/hash to the product iframe so that
+  // deep links like /n?id=...#key=... work when navigating via the test host URL.
+  // Must come after setupContainer so createIframeProvider does not overwrite it.
+  iframe.src = new URL(
+    window.location.pathname + window.location.search + window.location.hash,
+    config.productUrl,
+  ).href;
 
   // ── Control API for Playwright ─────────────────────────────
 
@@ -294,7 +317,7 @@ async function init(): Promise<void> {
     },
 
     async setAccounts(names: string[]) {
-      const accounts = names.map(n => ({
+      const accounts = names.map((n) => ({
         name: n.charAt(0).toUpperCase() + n.slice(1).toLowerCase(),
         uri: `//${n.charAt(0).toUpperCase()}${n.slice(1).toLowerCase()}`,
       }));
@@ -306,7 +329,9 @@ async function init(): Promise<void> {
       }
 
       // Recreate container with new accounts (triggers iframe reload)
-      const iframe = document.getElementById('product-frame') as HTMLIFrameElement;
+      const iframe = document.getElementById(
+        "product-frame",
+      ) as HTMLIFrameElement;
       iframe.src = config.productUrl;
 
       currentContainer = setupContainer(
@@ -342,13 +367,17 @@ async function init(): Promise<void> {
   };
 
   console.log(
-    '[test-host] Initialized:',
-    '\n  chain:', config.chain.name, '(' + config.chain.genesisHash.slice(0, 18) + '...)',
-    '\n  rpc:', config.chain.rpcUrl,
-    '\n  accounts:', config.accounts.map(a => a.name).join(', '),
+    "[test-host] Initialized:",
+    "\n  chain:",
+    config.chain.name,
+    "(" + config.chain.genesisHash.slice(0, 18) + "...)",
+    "\n  rpc:",
+    config.chain.rpcUrl,
+    "\n  accounts:",
+    config.accounts.map((a) => a.name).join(", "),
   );
 }
 
 init().catch((err) => {
-  console.error('[test-host] Init failed:', err);
+  console.error("[test-host] Init failed:", err);
 });
