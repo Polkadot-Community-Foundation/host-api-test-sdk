@@ -25,11 +25,14 @@ export interface TestHostServer {
   close(): Promise<void>;
 }
 
+/** A named dev account ('alice') or a custom account with a display name and Substrate URI. */
+export type Account = DevAccountName | DevAccountInfo;
+
 export interface CreateTestHostOptions {
   /** URL of the product to embed (e.g. http://localhost:3001) */
   productUrl: string;
-  /** Dev accounts to provide (default: ['alice']) */
-  accounts?: DevAccountName[];
+  /** Accounts to provide */
+  accounts?: Account[];
   /** Chain config (default: PASEO_ASSET_HUB) */
   chain?: ChainConfig;
   /** Port to listen on (default: 0 = random available port) */

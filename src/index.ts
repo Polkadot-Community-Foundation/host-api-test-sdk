@@ -8,6 +8,7 @@ export {
   SUPPORTED_CHAINS,
 } from './chains.js';
 export type {
+  Account,
   ChainConfig,
   CreateTestHostOptions,
   DevAccountInfo,

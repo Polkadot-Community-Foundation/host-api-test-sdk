@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEV_ACCOUNTS } from './accounts.js';
-import type { ChainConfig, DevAccountName } from './types.js';
+import type { Account, ChainConfig } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -17,16 +17,19 @@ function getBundleScript(): string {
 
 interface HostPageConfig {
   productUrl: string;
-  accounts: DevAccountName[];
+  accounts: Account[];
   chain: ChainConfig;
 }
 
 export function generateHostPage(config: HostPageConfig): string {
   const { productUrl, accounts, chain } = config;
 
-  const accountConfigs = accounts.map(name => {
-    const info = DEV_ACCOUNTS[name];
-    return { name: info.name, uri: info.uri };
+  const accountConfigs = accounts.map(entry => {
+    if (typeof entry === 'string') {
+      const info = DEV_ACCOUNTS[entry];
+      return { name: info.name, uri: info.uri };
+    }
+    return { name: entry.name, uri: entry.uri };
   });
 
   const configJson = JSON.stringify({
