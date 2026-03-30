@@ -21,3 +21,36 @@ await build({
 });
 
 console.log('Browser bundle built: dist/host-bundle.js');
+
+// CJS bundles for CommonJS compatibility (e.g. Playwright's default CJS loader).
+// Both bundles live in dist/ so __dirname resolves host-bundle.js correctly.
+const cjsShared = {
+  bundle: true,
+  format: 'cjs',
+  platform: 'node',
+  target: 'es2022',
+  sourcemap: false,
+  external: ['@novasamatech/host-api', '@playwright/test'],
+  // Polyfill import.meta.url for CJS (used by host-page.ts to locate host-bundle.js)
+  banner: {
+    js: 'var __import_meta_url = require("url").pathToFileURL(__filename).href;',
+  },
+  define: {
+    'import.meta.url': '__import_meta_url',
+  },
+};
+
+await Promise.all([
+  build({
+    ...cjsShared,
+    entryPoints: ['src/index.ts'],
+    outfile: 'dist/index.cjs',
+  }),
+  build({
+    ...cjsShared,
+    entryPoints: ['src/playwright/index.ts'],
+    outfile: 'dist/playwright.cjs',
+  }),
+]);
+
+console.log('CJS bundles built: dist/index.cjs, dist/playwright.cjs');

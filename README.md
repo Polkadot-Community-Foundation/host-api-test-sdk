@@ -1,5 +1,9 @@
 # @parity/host-api-test-sdk
 
+[![CI](https://github.com/paritytech/host-api-test-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/paritytech/host-api-test-sdk/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@parity/host-api-test-sdk)](https://www.npmjs.com/package/@parity/host-api-test-sdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
 Lightweight test host for E2E testing embedded Polkadot dapps that use the Spektr host-container protocol (`@novasamatech/host-container`).
 
 ## Why
@@ -24,7 +28,9 @@ No Docker, no React, no wallet UI. Just `pnpm add -D` and write tests.
 pnpm add -D @parity/host-api-test-sdk
 ```
 
-## Usage with Playwright
+Both ESM (`import`) and CommonJS (`require`) are supported.
+
+## Quick start with Playwright
 
 ```ts
 // e2e/setup.ts
@@ -142,7 +148,9 @@ Product (in iframe)
 
 The browser bundle (~780KB minified) includes `@novasamatech/host-container`, `@polkadot/keyring`, `@polkadot/types`, and WASM crypto. It's pre-built and inlined — consumers have zero build-time dependencies.
 
-## Fixture API
+## API reference
+
+### Fixture API (`@parity/host-api-test-sdk/playwright`)
 
 | Method | Description |
 |--------|-------------|
@@ -153,7 +161,7 @@ The browser bundle (~780KB minified) includes `@novasamatech/host-container`, `@
 | `testHost.clearSigningLog()` | Reset the signing log |
 | `testHost.waitForConnection(timeout?)` | Wait for product-sdk to connect |
 
-## Dev accounts
+### Dev accounts
 
 | Name | URI | SS58 (generic) |
 |------|-----|-----------------|
@@ -166,17 +174,65 @@ The browser bundle (~780KB minified) includes `@novasamatech/host-container`, `@
 
 These are standard Substrate dev accounts (sr25519, ss58Format=42). Products may re-encode them to a different SS58 prefix — the host matches by public key.
 
-## Built-in chains
+### Built-in chains
 
-| Chain | ID |
-|-------|----|
+| Chain | Export |
+|-------|--------|
 | Paseo Asset Hub | `PASEO_ASSET_HUB` |
 | Previewnet | `PREVIEWNET` |
 | Previewnet Asset Hub | `PREVIEWNET_ASSET_HUB` |
 
-## Account switching
+### Account switching
 
 Product-sdk's `accounts.subscribe()` is one-shot. Changing accounts requires disposing the container and recreating it, which reloads the iframe. This matches how production hosts work. For multi-actor tests, prefer `setAccounts(['alice', 'bob'])` upfront and use the product's own account selector.
+
+## Contributing
+
+Contributions are welcome! Please open an issue first if you want to discuss a larger change.
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) >= 22
+- [pnpm](https://pnpm.io/) >= 10
+
+### Development
+
+```bash
+# Install dependencies
+pnpm install
+
+# Build everything (browser bundle + TypeScript + CJS bundles)
+pnpm run build
+
+# Run tests (ESM + CJS export verification)
+pnpm test
+
+# Typecheck without emitting
+pnpm run typecheck
+```
+
+### Project structure
+
+```
+src/
+├── index.ts                  # Main entry point
+├── types.ts                  # Shared type definitions
+├── server.ts                 # Node HTTP server
+├── accounts.ts               # Dev account definitions
+├── chains.ts                 # Built-in chain configs
+├── host-page.ts              # HTML page generation
+├── browser/
+│   └── host-runtime.ts       # Browser runtime (bundled into IIFE)
+└── playwright/
+    ├── index.ts              # Playwright entry point
+    └── fixture.ts            # Playwright test fixture
+```
+
+The build produces three outputs:
+
+1. **Browser bundle** (`dist/host-bundle.js`) — IIFE built with esbuild, inlined into the host page at runtime
+2. **ESM modules** (`dist/*.js`) — TypeScript compiled with `tsc`
+3. **CJS bundles** (`dist/*.cjs`) — bundled with esbuild for CommonJS compatibility
 
 ## Migrating from 0.1.x to 0.2.x
 
@@ -201,4 +257,4 @@ If you only used built-in chains (`PASEO_ASSET_HUB`, etc.) and `createTestHostFi
 
 ## License
 
-Apache-2.0
+[MIT](./LICENSE)
