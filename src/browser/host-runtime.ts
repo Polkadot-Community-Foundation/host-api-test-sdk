@@ -61,6 +61,7 @@ let chainStatus = "connecting";
 let currentContainer: Container | null = null;
 let keyring: Keyring;
 const pairsByUri = new Map<string, KeyringPair>();
+const urisByPair = new Map<KeyringPair, string>();
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ function getPair(uri: string): KeyringPair {
   if (!pair) {
     pair = keyring.addFromUri(uri);
     pairsByUri.set(uri, pair);
+    urisByPair.set(pair, uri);
   }
   return pair;
 }
@@ -168,6 +170,18 @@ function setupContainer(
         name,
       })),
     );
+  });
+
+  container.handleAccountGet((params, { ok }) => {
+    const selectedPair = pairs[0];
+    const selectedAccUri = urisByPair.get(selectedPair.pair);
+    const productPair = getPair(`${selectedAccUri}//${params[0]}/${params[1]}`);
+
+    return ok({
+      publicKey: productPair.publicKey,
+      // name field is effectively deprecated
+      name: undefined,
+    });
   });
 
   container.handleAccountConnectionStatusSubscribe((_, send) => {
