@@ -45,6 +45,21 @@ export interface SigningLogEntry {
   timestamp: number;
 }
 
+export interface PermissionLogEntry {
+  tag: string;
+  value: unknown;
+  approved: boolean;
+  timestamp: number;
+}
+
+/**
+ * Controls how the test host responds to remote permission requests.
+ * - `'approve-all'` — auto-approve every request (default)
+ * - `'reject-all'` — auto-reject every request
+ * - `(tag: string, value: unknown) => boolean` — custom per-request decision
+ */
+export type PermissionBehavior = 'approve-all' | 'reject-all' | ((tag: string, value: unknown) => boolean);
+
 /** Shape of window.__TEST_HOST__ — shared between browser bundle and Playwright fixture. */
 export interface TestHostAPI {
   switchAccount(name: string): Promise<void>;
@@ -53,5 +68,11 @@ export interface TestHostAPI {
   clearSigningLog(): void;
   getConnectionStatus(): string;
   getChainStatus(): string;
+  /** Set how the host responds to remote permission requests. */
+  setPermissionBehavior(behavior: PermissionBehavior): void;
+  /** Get the log of all permission requests and their outcomes. */
+  getPermissionLog(): PermissionLogEntry[];
+  /** Clear the permission log. */
+  clearPermissionLog(): void;
   dispose(): void;
 }

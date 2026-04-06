@@ -19,6 +19,7 @@ This package gives you a **thin host page** that:
 - Auto-signs all extrinsic and raw signing requests — no popups
 - Proxies chain RPC via WebSocket
 - Exposes a control API for Playwright assertions (signing log, account switching)
+- Handles remote permission requests (auto-approve by default, configurable per test)
 
 No Docker, no React, no wallet UI. Just `pnpm add -D` and write tests.
 
@@ -129,6 +130,50 @@ const server = await createTestHostServer({
 });
 ```
 
+## Permission testing
+
+The test host auto-approves all remote permission requests by default. You can change this per test to verify your product handles rejections correctly:
+
+```ts
+test("handles permission rejection", async ({ testHost }) => {
+  // Reject all permission requests
+  await testHost.setPermissionBehavior("reject-all");
+
+  const frame = testHost.productFrame();
+  await frame.getByRole("button", { name: "Connect external" }).click();
+
+  // Product should show an error or fallback UI
+  await expect(frame.getByText("Permission denied")).toBeVisible();
+
+  // Verify the request was made and rejected
+  const log = await testHost.getPermissionLog();
+  expect(log).toHaveLength(1);
+  expect(log[0].tag).toBe("ExternalRequest");
+  expect(log[0].approved).toBe(false);
+});
+
+test("selective permissions", async ({ testHost }) => {
+  // Custom logic: approve TransactionSubmit, reject ExternalRequest
+  await testHost.setPermissionBehavior(
+    (tag) => tag === "TransactionSubmit"
+  );
+
+  // ... test product behavior ...
+});
+```
+
+Without the Playwright fixture, use `page.evaluate` directly:
+
+```ts
+await page.evaluate(() =>
+  window.__TEST_HOST__.setPermissionBehavior("reject-all")
+);
+
+const log = await page.evaluate(() =>
+  window.__TEST_HOST__.getPermissionLog()
+);
+```
+
 ## How it works
 
 ```
@@ -159,6 +204,9 @@ The browser bundle (~780KB minified) includes `@novasamatech/host-container`, `@
 | `testHost.setAccounts(names)` | Recreate container with multiple accounts |
 | `testHost.getSigningLog()` | All auto-signed payloads since last clear |
 | `testHost.clearSigningLog()` | Reset the signing log |
+| `testHost.setPermissionBehavior(behavior)` | Set permission response: `'approve-all'`, `'reject-all'`, or `(tag, value) => boolean` |
+| `testHost.getPermissionLog()` | All permission requests and outcomes since last clear |
+| `testHost.clearPermissionLog()` | Reset the permission log |
 | `testHost.waitForConnection(timeout?)` | Wait for product-sdk to connect |
 
 ### Dev accounts

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- **Permission handling** — the test host now handles `remote_permission` requests from the product. By default all permissions are auto-approved, matching the existing auto-sign behavior. Products can control this with:
+  - `setPermissionBehavior('approve-all' | 'reject-all' | fn)` — configure approve/reject/custom logic
+  - `getPermissionLog()` — inspect permission requests and their outcomes
+  - `clearPermissionLog()` — reset the log between tests
+- **New exported types**: `PermissionBehavior`, `PermissionLogEntry`
+
+### Changed
+
+- **Updated `@novasamatech/host-api` and `@novasamatech/host-container`** from `0.6.6-1` to `0.6.15`
+
 ## 0.2.0
 
 ### Breaking changes

@@ -64,6 +64,10 @@ describe('ESM import("@parity/host-api-test-sdk")', () => {
       assert.ok(html.includes('Bob'), 'has Bob account');
       assert.ok(html.includes('__TEST_HOST__'), 'has test-host API');
       assert.ok(html.length > 10000, 'has bundle script (page > 10KB)');
+      assert.ok(
+        html.includes('Permission') && html.includes('approved'),
+        'has permission handler in bundle',
+      );
     });
   });
 });

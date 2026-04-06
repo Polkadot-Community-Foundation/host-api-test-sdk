@@ -1,7 +1,7 @@
 import type { Page, FrameLocator } from '@playwright/test';
 import { createTestHostServer } from '../server.js';
 import { DEFAULT_CHAIN } from '../chains.js';
-import type { CreateTestHostOptions, DevAccountName, SigningLogEntry, TestHostAPI } from '../types.js';
+import type { CreateTestHostOptions, DevAccountName, PermissionBehavior, PermissionLogEntry, SigningLogEntry, TestHostAPI } from '../types.js';
 
 export interface TestHost {
   /** The host page (contains the iframe) */
@@ -21,6 +21,15 @@ export interface TestHost {
 
   /** Clear the signing log */
   clearSigningLog(): Promise<void>;
+
+  /** Set how the host responds to remote permission requests */
+  setPermissionBehavior(behavior: PermissionBehavior): Promise<void>;
+
+  /** Get the log of all permission requests and their outcomes */
+  getPermissionLog(): Promise<PermissionLogEntry[]>;
+
+  /** Clear the permission log */
+  clearPermissionLog(): Promise<void>;
 
   /** Wait until the product-sdk has connected to the host container */
   waitForConnection(timeout?: number): Promise<void>;
@@ -73,6 +82,18 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
 
         async clearSigningLog() {
           await page.evaluate(() => window.__TEST_HOST__.clearSigningLog());
+        },
+
+        async setPermissionBehavior(behavior: PermissionBehavior) {
+          await page.evaluate((b) => window.__TEST_HOST__.setPermissionBehavior(b), behavior);
+        },
+
+        async getPermissionLog() {
+          return page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
+        },
+
+        async clearPermissionLog() {
+          await page.evaluate(() => window.__TEST_HOST__.clearPermissionLog());
         },
 
         async waitForConnection(timeout = 30_000) {
