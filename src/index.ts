@@ -14,6 +14,8 @@ export type {
   DevAccountInfo,
   DevAccountName,
   HexString,
+  PermissionBehavior,
+  PermissionLogEntry,
   SigningLogEntry,
   TestHostAPI,
   TestHostServer,

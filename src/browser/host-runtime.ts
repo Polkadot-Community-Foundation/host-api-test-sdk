@@ -23,7 +23,12 @@ import { cryptoWaitReady } from "@polkadot/util-crypto";
 import { ResultAsync } from "neverthrow";
 import { getWsProvider } from "polkadot-api/ws-provider";
 
-import type { SigningLogEntry, TestHostAPI } from "../types.js";
+import type {
+  PermissionBehavior,
+  PermissionLogEntry,
+  SigningLogEntry,
+  TestHostAPI,
+} from "../types.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -56,6 +61,8 @@ declare global {
 // ── State ──────────────────────────────────────────────────────────
 
 const signingLog: SigningLogEntry[] = [];
+const permissionLog: PermissionLogEntry[] = [];
+let permissionBehavior: PermissionBehavior = "approve-all";
 let connectionStatus = "connecting";
 let chainStatus = "connecting";
 let currentContainer: Container | null = null;
@@ -136,6 +143,32 @@ function setupContainer(
       return ok(supported);
     }
     return ok(false);
+  });
+
+  // ── Permissions (auto-approve in test environment) ──────────
+
+  container.handlePermission((params, { ok }) => {
+    let approved: boolean;
+    if (permissionBehavior === "approve-all") {
+      approved = true;
+    } else if (permissionBehavior === "reject-all") {
+      approved = false;
+    } else {
+      approved = permissionBehavior(params.tag, params.value);
+    }
+
+    permissionLog.push({
+      tag: params.tag,
+      value: params.value,
+      approved,
+      timestamp: Date.now(),
+    });
+
+    console.log(
+      `[test-host] Permission ${approved ? "approved" : "rejected"}:`,
+      params.tag,
+    );
+    return ok(approved);
   });
 
   // ── Chain connection ─────────────────────────────────────────
@@ -370,6 +403,18 @@ async function init(): Promise<void> {
 
     getChainStatus() {
       return chainStatus;
+    },
+
+    setPermissionBehavior(behavior: PermissionBehavior) {
+      permissionBehavior = behavior;
+    },
+
+    getPermissionLog() {
+      return [...permissionLog];
+    },
+
+    clearPermissionLog() {
+      permissionLog.length = 0;
     },
 
     dispose() {

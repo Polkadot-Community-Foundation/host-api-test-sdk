@@ -41,10 +41,10 @@
     }
   },
   "dependencies": {
-    "@novasamatech/host-api": "0.6.6-1"
+    "@novasamatech/host-api": "0.6.15"
   },
   "devDependencies": {
-    "@novasamatech/host-container": "0.6.6-1",
+    "@novasamatech/host-container": "0.6.15",
     "@polkadot/keyring": "^14.0.0",
     "@polkadot/types": "^16.0.0",
     "@polkadot/util": "^14.0.0",
