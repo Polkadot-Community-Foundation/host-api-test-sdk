@@ -19,19 +19,30 @@ interface HostPageConfig {
   productUrl: string;
   accounts: Account[];
   chain: ChainConfig;
-  deriveProductAccounts?: boolean;
+  productAccounts?: Record<string, Account>;
+}
+
+function resolveAccount(entry: Account): { name: string; uri: string } {
+  if (typeof entry === 'string') {
+    const info = DEV_ACCOUNTS[entry];
+    return { name: info.name, uri: info.uri };
+  }
+  return { name: entry.name, uri: entry.uri };
 }
 
 export function generateHostPage(config: HostPageConfig): string {
   const { productUrl, accounts, chain } = config;
 
-  const accountConfigs = accounts.map(entry => {
-    if (typeof entry === 'string') {
-      const info = DEV_ACCOUNTS[entry];
-      return { name: info.name, uri: info.uri };
+  const accountConfigs = accounts.map(resolveAccount);
+
+  // Resolve productAccounts map values to { name, uri }
+  let productAccountConfigs: Record<string, { name: string; uri: string }> | undefined;
+  if (config.productAccounts) {
+    productAccountConfigs = {};
+    for (const [key, value] of Object.entries(config.productAccounts)) {
+      productAccountConfigs[key] = resolveAccount(value);
     }
-    return { name: entry.name, uri: entry.uri };
-  });
+  }
 
   const configJson = JSON.stringify({
     productUrl,
@@ -41,7 +52,7 @@ export function generateHostPage(config: HostPageConfig): string {
       rpcUrl: chain.rpcUrl,
       name: chain.name,
     },
-    deriveProductAccounts: config.deriveProductAccounts ?? false,
+    ...(productAccountConfigs && { productAccounts: productAccountConfigs }),
   });
 
   const bundleScript = getBundleScript();

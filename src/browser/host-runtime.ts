@@ -47,8 +47,8 @@ interface HostConfig {
   productUrl: string;
   accounts: AccountConfig[];
   chain: ChainRuntimeConfig;
-  /** When true, product accounts are derived as //Bob//identity1/identity2 (unique per product). Default: false (use base dev account). */
-  deriveProductAccounts?: boolean;
+  /** Maps "dotnsId/index" → { name, uri } for product account overrides. */
+  productAccounts?: Record<string, AccountConfig>;
 }
 
 // ── Globals ────────────────────────────────────────────────────────
@@ -126,6 +126,13 @@ function setupContainer(
     const pair = getPair(acc.uri);
     return { pair, name: acc.name };
   });
+
+  // Also derive keypairs for product account overrides so signing works
+  if (config.productAccounts) {
+    for (const acc of Object.values(config.productAccounts)) {
+      getPair(acc.uri); // registers in pairsByUri for signing lookups
+    }
+  }
 
   // ── Feature support ──────────────────────────────────────────
 
@@ -207,31 +214,32 @@ function setupContainer(
     );
   });
 
-  // Product accounts: by default, return the base dev account directly.
+  // Product accounts: when the product calls getProductAccount(dotnsId, index),
+  // look up "dotnsId/index" in the productAccounts map. If found, return that
+  // account. Otherwise derive as production: //Bob//dotnsId/index.
   //
-  // In production, product-sdk derives a unique keypair per product
-  // (e.g. //Bob//myapp.dot/0). In the test environment we skip this
-  // derivation by default and return the well-known dev account so that:
-  //   1. The account already has funds on public testnets (no funding step)
-  //   2. The address is deterministic and matches what faucets/scripts fund
-  //   3. Tests don't depend on a specific DotNS identifier
-  //
-  // Set deriveProductAccounts: true to get the production derivation behavior.
+  // This lets tests map product accounts to funded dev accounts:
+  //   productAccounts: { 'myapp.dot/0': 'bob' }
+  //   → getProductAccount("myapp.dot", 0) returns //Bob's keypair
   container.handleAccountGet((params, { ok }) => {
-    const selectedPair = pairs[0];
+    const key = `${params[0]}/${params[1]}`;
+    const override = config.productAccounts?.[key];
 
-    if (config.deriveProductAccounts) {
-      const selectedAccUri = urisByPair.get(selectedPair.pair);
-      const productPair = getPair(`${selectedAccUri}//${params[0]}/${params[1]}`);
+    if (override) {
+      const pair = getPair(override.uri);
       return ok({
-        publicKey: productPair.publicKey,
-        name: undefined,
+        publicKey: pair.publicKey,
+        name: override.name,
       });
     }
 
+    // Default: derive from the selected account (production behavior)
+    const selectedPair = pairs[0];
+    const selectedAccUri = urisByPair.get(selectedPair.pair);
+    const productPair = getPair(`${selectedAccUri}//${params[0]}/${params[1]}`);
     return ok({
-      publicKey: selectedPair.pair.publicKey,
-      name: selectedPair.name,
+      publicKey: productPair.publicKey,
+      name: undefined,
     });
   });
 

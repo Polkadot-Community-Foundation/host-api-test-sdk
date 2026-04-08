@@ -1,14 +1,21 @@
 # Changelog
 
-## 0.3.1
-
-### Changed
-
-- **Product accounts now use the base dev keypair by default** — `handleAccountGet` returns the selected dev account (e.g. `//Bob`) instead of deriving a product-specific keypair (e.g. `//Bob//myapp.dot/0`). This means test accounts have the same address regardless of the product's DotNS identifier, so pre-funded accounts on public testnets work without extra funding steps. Previously, each unique DotNS identifier produced a different derived address with zero balance, requiring manual funding before tests could run.
+## 0.4.0
 
 ### Added
 
-- **`deriveProductAccounts` option** — set to `true` on `createTestHostServer()` or `createTestHostFixture()` to restore the previous behavior where product accounts are derived as `//Bob//dotnsId/index`. Useful for testing multi-product account isolation. Default: `false`.
+- **`productAccounts` option** — maps product account requests (`"dotnsId/index"`) to specific accounts. Lets you point derived product accounts at funded dev accounts without changing the derivation logic. Unmapped identities fall back to production-style derivation (`//Bob//dotnsId/index`).
+  ```ts
+  productAccounts: {
+    'myapp.dot/0': 'bob',
+    'myapp.dot/2': { name: 'Custom', uri: '//My//Path' },
+  }
+  ```
+- **Custom accounts everywhere** — `accounts` (root) and `productAccounts` now accept `{ name, uri }` objects in addition to dev account names, so you can use arbitrary Substrate URIs (derivation paths, mnemonics, hex seeds).
+  ```ts
+  accounts: ['bob', { name: 'From mnemonic', uri: 'word1 word2 ... word12' }]
+  ```
+- **Playwright integration tests** — verifies product account derivation and `productAccounts` mapping end-to-end with a real product in an iframe.
 
 ## 0.3.0
 

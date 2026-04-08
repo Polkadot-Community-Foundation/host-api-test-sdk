@@ -17,7 +17,7 @@ export async function createTestHostServer(
     productUrl,
     accounts,
     chain,
-    deriveProductAccounts: options.deriveProductAccounts,
+    productAccounts: options.productAccounts,
   });
 
   const server = createServer((req, res) => {
