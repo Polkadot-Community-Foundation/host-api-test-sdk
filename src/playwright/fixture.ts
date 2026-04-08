@@ -42,6 +42,8 @@ export interface TestHostFixtureOptions {
   accounts?: DevAccountName[];
   /** Chain config (default: PASEO_ASSET_HUB) */
   chain?: CreateTestHostOptions['chain'];
+  /** Derive unique product accounts per DotNS identifier (default: false — use base dev accounts) */
+  deriveProductAccounts?: boolean;
 }
 
 export function createTestHostFixture(defaults: TestHostFixtureOptions) {
@@ -51,6 +53,7 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
         productUrl: defaults.productUrl,
         accounts: defaults.accounts ?? ['alice'],
         chain: defaults.chain ?? DEFAULT_CHAIN,
+        deriveProductAccounts: defaults.deriveProductAccounts,
       });
 
       await page.goto(server.url);

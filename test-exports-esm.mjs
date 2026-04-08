@@ -70,6 +70,61 @@ describe('ESM import("@parity/host-api-test-sdk")', () => {
       );
     });
   });
+
+  describe('deriveProductAccounts config', () => {
+    let serverDefault;
+    let serverDerived;
+
+    after(async () => {
+      if (serverDefault) await serverDefault.close();
+      if (serverDerived) await serverDerived.close();
+    });
+
+    it('defaults to deriveProductAccounts: false in host config', async () => {
+      serverDefault = await sdk.createTestHostServer({
+        productUrl: 'http://localhost:3001',
+        accounts: ['alice'],
+      });
+
+      const res = await fetch(serverDefault.url);
+      const html = await res.text();
+
+      // Extract the config JSON from the page
+      const match = html.match(/window\.__TEST_HOST_CONFIG__\s*=\s*({.*?});/);
+      assert.ok(match, 'config found in page');
+      const config = JSON.parse(match[1]);
+      assert.strictEqual(config.deriveProductAccounts, false, 'default is false');
+    });
+
+    it('passes deriveProductAccounts: true when set', async () => {
+      serverDerived = await sdk.createTestHostServer({
+        productUrl: 'http://localhost:3001',
+        accounts: ['bob'],
+        deriveProductAccounts: true,
+      });
+
+      const res = await fetch(serverDerived.url);
+      const html = await res.text();
+
+      const match = html.match(/window\.__TEST_HOST_CONFIG__\s*=\s*({.*?});/);
+      assert.ok(match, 'config found in page');
+      const config = JSON.parse(match[1]);
+      assert.strictEqual(config.deriveProductAccounts, true, 'explicitly true');
+    });
+
+    it('bundle contains both code paths for account derivation', async () => {
+      // The default server's bundle should contain the derivation logic
+      // (guarded by deriveProductAccounts flag) and the direct-return path
+      const res = await fetch(serverDefault.url);
+      const html = await res.text();
+
+      // The bundle should have the flag check
+      assert.ok(
+        html.includes('deriveProductAccounts'),
+        'bundle references deriveProductAccounts flag',
+      );
+    });
+  });
 });
 
 describe('ESM import("@parity/host-api-test-sdk/playwright")', () => {

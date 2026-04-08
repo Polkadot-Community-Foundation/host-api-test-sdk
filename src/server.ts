@@ -13,7 +13,12 @@ export async function createTestHostServer(
     port = 0,
   } = options;
 
-  const html = generateHostPage({ productUrl, accounts, chain });
+  const html = generateHostPage({
+    productUrl,
+    accounts,
+    chain,
+    deriveProductAccounts: options.deriveProductAccounts,
+  });
 
   const server = createServer((req, res) => {
     // Serve the host page for any request

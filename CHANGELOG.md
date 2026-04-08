@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+### Changed
+
+- **Product accounts now use the base dev keypair by default** — `handleAccountGet` returns the selected dev account (e.g. `//Bob`) instead of deriving a product-specific keypair (e.g. `//Bob//myapp.dot/0`). This means test accounts have the same address regardless of the product's DotNS identifier, so pre-funded accounts on public testnets work without extra funding steps. Previously, each unique DotNS identifier produced a different derived address with zero balance, requiring manual funding before tests could run.
+
+### Added
+
+- **`deriveProductAccounts` option** — set to `true` on `createTestHostServer()` or `createTestHostFixture()` to restore the previous behavior where product accounts are derived as `//Bob//dotnsId/index`. Useful for testing multi-product account isolation. Default: `false`.
+
 ## 0.3.0
 
 ### Added

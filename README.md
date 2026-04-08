@@ -222,6 +222,17 @@ The browser bundle (~780KB minified) includes `@novasamatech/host-container`, `@
 
 These are standard Substrate dev accounts (sr25519, ss58Format=42). Products may re-encode them to a different SS58 prefix — the host matches by public key.
 
+> **Product accounts**: In production, `product-sdk` derives a unique keypair per product via `getProductAccount(dotnsId, index)`. In the test environment, the host returns the base dev account directly by default. This means Bob's product account **is** Bob — same address, same funds. No extra funding or DotNS setup needed.
+>
+> If you need production-like derivation (unique address per product), set `deriveProductAccounts: true`:
+> ```ts
+> createTestHostFixture({
+>   productUrl: 'http://localhost:3000',
+>   accounts: ['bob'],
+>   deriveProductAccounts: true, // //Bob//myapp.dot/0 — unique keypair, needs separate funding
+> });
+> ```
+
 ### Built-in chains
 
 | Chain | Export |

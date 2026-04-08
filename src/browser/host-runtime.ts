@@ -47,6 +47,8 @@ interface HostConfig {
   productUrl: string;
   accounts: AccountConfig[];
   chain: ChainRuntimeConfig;
+  /** When true, product accounts are derived as //Bob//identity1/identity2 (unique per product). Default: false (use base dev account). */
+  deriveProductAccounts?: boolean;
 }
 
 // ── Globals ────────────────────────────────────────────────────────
@@ -112,14 +114,14 @@ function getPairByAddress(address: string): KeyringPair | undefined {
 
 function setupContainer(
   iframe: HTMLIFrameElement,
-  productUrl: string,
-  accounts: AccountConfig[],
-  chainConfig: ChainRuntimeConfig,
+  config: HostConfig,
+  accountsOverride?: AccountConfig[],
 ): Container {
-  const provider = createIframeProvider({ iframe, url: productUrl });
+  const provider = createIframeProvider({ iframe, url: config.productUrl });
   const container = createContainer(provider);
 
   // Derive keypairs for all requested accounts
+  const accounts = accountsOverride ?? config.accounts;
   const pairs = accounts.map((acc) => {
     const pair = getPair(acc.uri);
     return { pair, name: acc.name };
@@ -130,13 +132,13 @@ function setupContainer(
   container.handleFeatureSupported((params, { ok }) => {
     if (params.tag === "Chain") {
       const requested = normalizeHash(params.value);
-      const configured = normalizeHash(chainConfig.genesisHash);
+      const configured = normalizeHash(config.chain.genesisHash);
       const supported = requested === configured;
       if (!supported) {
         console.warn(
           `[test-host] Chain feature check MISMATCH:\n` +
             `  requested: ${String(params.value)} (type: ${typeof params.value})\n` +
-            `  configured: ${chainConfig.genesisHash}\n` +
+            `  configured: ${config.chain.genesisHash}\n` +
             `  normalized: ${requested} vs ${configured}`,
         );
       }
@@ -174,16 +176,16 @@ function setupContainer(
   // ── Chain connection ─────────────────────────────────────────
 
   chainStatus = "idle";
-  const chainProvider = getWsProvider(chainConfig.rpcUrl);
+  const chainProvider = getWsProvider(config.chain.rpcUrl);
 
   container.handleChainConnection((requestedGenesisHash) => {
     const requested = normalizeHash(requestedGenesisHash);
-    const configured = normalizeHash(chainConfig.genesisHash);
+    const configured = normalizeHash(config.chain.genesisHash);
     if (requested === configured) {
       chainStatus = "connected";
       console.log(
         "[test-host] Chain connection established for",
-        chainConfig.name,
+        config.chain.name,
       );
       return chainProvider;
     }
@@ -205,15 +207,31 @@ function setupContainer(
     );
   });
 
+  // Product accounts: by default, return the base dev account directly.
+  //
+  // In production, product-sdk derives a unique keypair per product
+  // (e.g. //Bob//myapp.dot/0). In the test environment we skip this
+  // derivation by default and return the well-known dev account so that:
+  //   1. The account already has funds on public testnets (no funding step)
+  //   2. The address is deterministic and matches what faucets/scripts fund
+  //   3. Tests don't depend on a specific DotNS identifier
+  //
+  // Set deriveProductAccounts: true to get the production derivation behavior.
   container.handleAccountGet((params, { ok }) => {
     const selectedPair = pairs[0];
-    const selectedAccUri = urisByPair.get(selectedPair.pair);
-    const productPair = getPair(`${selectedAccUri}//${params[0]}/${params[1]}`);
+
+    if (config.deriveProductAccounts) {
+      const selectedAccUri = urisByPair.get(selectedPair.pair);
+      const productPair = getPair(`${selectedAccUri}//${params[0]}/${params[1]}`);
+      return ok({
+        publicKey: productPair.publicKey,
+        name: undefined,
+      });
+    }
 
     return ok({
-      publicKey: productPair.publicKey,
-      // name field is effectively deprecated
-      name: undefined,
+      publicKey: selectedPair.pair.publicKey,
+      name: selectedPair.name,
     });
   });
 
@@ -341,12 +359,7 @@ async function init(): Promise<void> {
 
   const iframe = document.getElementById("product-frame") as HTMLIFrameElement;
 
-  currentContainer = setupContainer(
-    iframe,
-    config.productUrl,
-    config.accounts,
-    config.chain,
-  );
+  currentContainer = setupContainer(iframe, config);
 
   // Forward the host page's path/search/hash to the product iframe so that
   // deep links like /n?id=...#key=... work when navigating via the test host URL.
@@ -381,12 +394,7 @@ async function init(): Promise<void> {
       ) as HTMLIFrameElement;
       iframe.src = config.productUrl;
 
-      currentContainer = setupContainer(
-        iframe,
-        config.productUrl,
-        accounts,
-        config.chain,
-      );
+      currentContainer = setupContainer(iframe, config, accounts);
     },
 
     getSigningLog() {

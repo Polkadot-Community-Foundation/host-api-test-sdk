@@ -19,6 +19,7 @@ interface HostPageConfig {
   productUrl: string;
   accounts: Account[];
   chain: ChainConfig;
+  deriveProductAccounts?: boolean;
 }
 
 export function generateHostPage(config: HostPageConfig): string {
@@ -40,6 +41,7 @@ export function generateHostPage(config: HostPageConfig): string {
       rpcUrl: chain.rpcUrl,
       name: chain.name,
     },
+    deriveProductAccounts: config.deriveProductAccounts ?? false,
   });
 
   const bundleScript = getBundleScript();

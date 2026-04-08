@@ -37,6 +37,19 @@ export interface CreateTestHostOptions {
   chain?: ChainConfig;
   /** Port to listen on (default: 0 = random available port) */
   port?: number;
+  /**
+   * Derive unique product accounts per DotNS identifier (production behavior).
+   *
+   * When `false` (default), product account requests return the base dev
+   * account directly (e.g. `//Bob`). This means the test account has the
+   * same address as the well-known dev account — already funded on public
+   * testnets, no extra setup needed.
+   *
+   * When `true`, product accounts are derived as `//Bob//dotnsId/index`,
+   * producing a unique keypair per product. Useful for testing multi-product
+   * isolation, but requires funding the derived accounts separately.
+   */
+  deriveProductAccounts?: boolean;
 }
 
 export interface SigningLogEntry {

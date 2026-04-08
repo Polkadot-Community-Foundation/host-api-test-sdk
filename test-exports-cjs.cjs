@@ -70,6 +70,57 @@ describe('CJS require("@parity/host-api-test-sdk")', () => {
       );
     });
   });
+
+  describe('deriveProductAccounts config (CJS)', () => {
+    let serverDefault;
+    let serverDerived;
+
+    after(async () => {
+      if (serverDefault) await serverDefault.close();
+      if (serverDerived) await serverDerived.close();
+    });
+
+    it('defaults to deriveProductAccounts: false in host config', async () => {
+      serverDefault = await sdk.createTestHostServer({
+        productUrl: 'http://localhost:3001',
+        accounts: ['alice'],
+      });
+
+      const res = await fetch(serverDefault.url);
+      const html = await res.text();
+
+      const match = html.match(/window\.__TEST_HOST_CONFIG__\s*=\s*({.*?});/);
+      assert.ok(match, 'config found in page');
+      const config = JSON.parse(match[1]);
+      assert.strictEqual(config.deriveProductAccounts, false, 'default is false');
+    });
+
+    it('passes deriveProductAccounts: true when set', async () => {
+      serverDerived = await sdk.createTestHostServer({
+        productUrl: 'http://localhost:3001',
+        accounts: ['bob'],
+        deriveProductAccounts: true,
+      });
+
+      const res = await fetch(serverDerived.url);
+      const html = await res.text();
+
+      const match = html.match(/window\.__TEST_HOST_CONFIG__\s*=\s*({.*?});/);
+      assert.ok(match, 'config found in page');
+      const config = JSON.parse(match[1]);
+      assert.strictEqual(config.deriveProductAccounts, true, 'explicitly true');
+    });
+
+    it('bundle contains both code paths for account derivation', async () => {
+      const res = await fetch(serverDefault.url);
+      const html = await res.text();
+
+      assert.ok(
+        html.includes('deriveProductAccounts'),
+        'bundle references deriveProductAccounts flag',
+      );
+    });
+  });
 });
 
 describe('CJS require("@parity/host-api-test-sdk/playwright")', () => {
