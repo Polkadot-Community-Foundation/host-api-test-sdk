@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+
+- **`productAccounts` option** — maps product account requests (`"dotnsId/index"`) to specific accounts. Lets you point derived product accounts at funded dev accounts without changing the derivation logic. Unmapped identities fall back to production-style derivation (`//Bob//dotnsId/index`).
+  ```ts
+  productAccounts: {
+    'myapp.dot/0': 'bob',
+    'myapp.dot/2': { name: 'Custom', uri: '//My//Path' },
+  }
+  ```
+- **Custom accounts everywhere** — `accounts` (root) and `productAccounts` now accept `{ name, uri }` objects in addition to dev account names, so you can use arbitrary Substrate URIs (derivation paths, mnemonics, hex seeds).
+  ```ts
+  accounts: ['bob', { name: 'From mnemonic', uri: 'word1 word2 ... word12' }]
+  ```
+- **Playwright integration tests** — verifies product account derivation and `productAccounts` mapping end-to-end with a real product in an iframe.
+
 ## 0.3.0
 
 ### Added

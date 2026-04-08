@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.tgz
 .DS_Store
+test/test-product-bundle.js
+test/test-results/
+test-results/

@@ -15,6 +15,16 @@ export type DevAccountName = 'alice' | 'bob' | 'charlie' | 'dave' | 'eve' | 'fer
 
 export interface DevAccountInfo {
   name: string;
+  /**
+   * Substrate URI — passed to `@polkadot/keyring.addFromUri()`.
+   *
+   * Examples:
+   *  - `'//Alice'` — dev account
+   *  - `'//Alice//myapp/0'` — derivation from dev seed
+   *  - `'word1 word2 ... word12'` — mnemonic
+   *  - `'word1 word2 ... word12//hard/soft'` — mnemonic + derivation
+   *  - `'0xabcdef...'` — hex seed
+   */
   uri: string;
 }
 
@@ -31,12 +41,34 @@ export type Account = DevAccountName | DevAccountInfo;
 export interface CreateTestHostOptions {
   /** URL of the product to embed (e.g. http://localhost:3001) */
   productUrl: string;
-  /** Accounts to provide */
+  /** Accounts to provide (used for getNonProductAccounts and signing) */
   accounts?: Account[];
   /** Chain config (default: PASEO_ASSET_HUB) */
   chain?: ChainConfig;
   /** Port to listen on (default: 0 = random available port) */
   port?: number;
+  /**
+   * Map product account requests to specific accounts.
+   *
+   * Keys are `"dotnsId/derivationIndex"` (e.g. `"myapp.dot/0"`).
+   * Values are dev account names or custom `{ name, uri }` objects.
+   *
+   * When a product calls `getProductAccount(dotnsId, index)`:
+   *   - If `productAccounts` has a matching key → return that account
+   *   - Otherwise → derive as production: `//Bob//dotnsId/index`
+   *
+   * This lets you map product accounts to funded dev accounts while
+   * keeping different derivation indices distinct:
+   *
+   * ```ts
+   * productAccounts: {
+   *   'myapp.dot/0': 'bob',      // main account → //Bob (funded)
+   *   'myapp.dot/2': 'charlie',  // secondary → //Charlie (funded)
+   *   'myapp.dot/5': { name: 'Custom', uri: '//My//Custom' },
+   * }
+   * ```
+   */
+  productAccounts?: Record<string, Account>;
 }
 
 export interface SigningLogEntry {

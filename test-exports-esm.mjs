@@ -70,6 +70,50 @@ describe('ESM import("@parity/host-api-test-sdk")', () => {
       );
     });
   });
+
+  describe('productAccounts config', () => {
+    let serverWithMap;
+
+    after(async () => {
+      if (serverWithMap) await serverWithMap.close();
+    });
+
+    it('passes productAccounts to host config when set', async () => {
+      serverWithMap = await sdk.createTestHostServer({
+        productUrl: 'http://localhost:3001',
+        accounts: ['bob'],
+        productAccounts: { 'myapp.dot/0': 'bob', 'myapp.dot/2': 'charlie' },
+      });
+
+      const res = await fetch(serverWithMap.url);
+      const html = await res.text();
+
+      const match = html.match(/window\.__TEST_HOST_CONFIG__\s*=\s*({.*?});/);
+      assert.ok(match, 'config found in page');
+      const config = JSON.parse(match[1]);
+      assert.ok(config.productAccounts, 'productAccounts present');
+      assert.strictEqual(config.productAccounts['myapp.dot/0'].uri, '//Bob');
+      assert.strictEqual(config.productAccounts['myapp.dot/2'].uri, '//Charlie');
+    });
+
+    it('omits productAccounts from config when not set', async () => {
+      const server = await sdk.createTestHostServer({
+        productUrl: 'http://localhost:3001',
+        accounts: ['alice'],
+      });
+
+      try {
+        const res = await fetch(server.url);
+        const html = await res.text();
+
+        const match = html.match(/window\.__TEST_HOST_CONFIG__\s*=\s*({.*?});/);
+        const config = JSON.parse(match[1]);
+        assert.strictEqual(config.productAccounts, undefined, 'no productAccounts key');
+      } finally {
+        await server.close();
+      }
+    });
+  });
 });
 
 describe('ESM import("@parity/host-api-test-sdk/playwright")', () => {

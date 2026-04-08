@@ -222,6 +222,35 @@ The browser bundle (~780KB minified) includes `@novasamatech/host-container`, `@
 
 These are standard Substrate dev accounts (sr25519, ss58Format=42). Products may re-encode them to a different SS58 prefix — the host matches by public key.
 
+Both `accounts` and `productAccounts` accept dev account names or custom `{ name, uri }` objects. The `uri` is any [Substrate URI](https://polkadot-js.github.io/docs/keyring/start/suri/) — dev paths, mnemonics, or hex seeds:
+
+```ts
+createTestHostFixture({
+  productUrl: 'http://localhost:3000',
+  accounts: [
+    'bob',
+    { name: 'From mnemonic', uri: 'word1 word2 word3 ... word12' },
+    { name: 'Derived', uri: '//Alice//custom/0' },
+  ],
+});
+```
+
+> **Product accounts**: In production, `product-sdk` derives a unique keypair per product via `getProductAccount(dotnsId, index)`. By default the test host does the same derivation. Use `productAccounts` to map specific identities to funded dev accounts:
+>
+> ```ts
+> createTestHostFixture({
+>   productUrl: 'http://localhost:3000',
+>   accounts: ['bob'],
+>   productAccounts: {
+>     'myapp.dot/0': 'bob',      // main account → //Bob (funded)
+>     'myapp.dot/2': 'charlie',  // secondary → //Charlie (funded)
+>     'myapp.dot/5': { name: 'Custom', uri: '//My//Custom' },
+>   },
+> });
+> ```
+>
+> Unmapped identities fall back to production-style derivation (`//Bob//dotnsId/index`).
+
 ### Built-in chains
 
 | Chain | Export |
