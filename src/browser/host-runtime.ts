@@ -138,6 +138,14 @@ function buildAllowAttribute(): string {
   return policies.join("; ");
 }
 
+/** Update the product iframe's `allow` attribute from current granted device permissions. */
+function updateIframeAllow(): void {
+  const iframeEl = document.getElementById("product-frame") as HTMLIFrameElement;
+  if (iframeEl) {
+    iframeEl.allow = buildAllowAttribute();
+  }
+}
+
 // ── Container setup ────────────────────────────────────────────────
 
 function setupContainer(
@@ -145,6 +153,11 @@ function setupContainer(
   config: HostConfig,
   accountsOverride?: AccountConfig[],
 ): Container {
+  // Reset permission state on container recreation — matches real hosts
+  // where permissions are per-session, not carried across reconnects.
+  grantedPermissions.clear();
+  permissionLog.length = 0;
+
   const provider = createIframeProvider({ iframe, url: config.productUrl });
   const container = createContainer(provider);
 
@@ -246,16 +259,10 @@ function setupContainer(
     );
 
     if (approved) {
-      // Update iframe allow attribute and reload — matching dot.li behavior.
-      // The iframe needs to reload for the new Permissions Policy to take effect.
-      const iframeEl = document.getElementById(
-        "product-frame",
-      ) as HTMLIFrameElement;
-      iframeEl.allow = buildAllowAttribute();
-      console.log(
-        "[test-host] Updated iframe allow:",
-        iframeEl.allow,
-      );
+      // Update iframe allow attribute. In dot.li the iframe reloads for the
+      // new Permissions Policy to take effect; here we update the attribute
+      // so it applies on the next navigation or container recreation.
+      updateIframeAllow();
     }
 
     return ok(approved);
@@ -523,23 +530,12 @@ async function init(): Promise<void> {
 
     grantPermission(tag: string) {
       grantedPermissions.add(tag);
-      // If this is a device permission, update the iframe allow attribute
-      if (DEVICE_PERMISSION_POLICY[tag]) {
-        const iframeEl = document.getElementById(
-          "product-frame",
-        ) as HTMLIFrameElement;
-        iframeEl.allow = buildAllowAttribute();
-      }
+      if (DEVICE_PERMISSION_POLICY[tag]) updateIframeAllow();
     },
 
     revokePermission(tag: string) {
       grantedPermissions.delete(tag);
-      if (DEVICE_PERMISSION_POLICY[tag]) {
-        const iframeEl = document.getElementById(
-          "product-frame",
-        ) as HTMLIFrameElement;
-        iframeEl.allow = buildAllowAttribute();
-      }
+      if (DEVICE_PERMISSION_POLICY[tag]) updateIframeAllow();
     },
 
     getGrantedPermissions() {

@@ -328,10 +328,10 @@ test.describe('Permission enforcement', () => {
       // Set reject-all behavior
       await page.evaluate(() => window.__TEST_HOST__.setPermissionBehavior('reject-all'));
 
-      // Product requests permission — gets rejected
+      // Product requests permission — protocol round-trip succeeds but permission is denied
       const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestTransactionSubmit());
-      expect(permResult.ok).toBe(true); // request succeeded, but...
-      // approved could be false depending on result shape
+      expect(permResult.ok).toBe(true);
+      expect(permResult.approved).toBe(false);
 
       // Signing should still fail since permission was rejected
       const signResult = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
