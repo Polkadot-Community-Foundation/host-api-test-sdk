@@ -64,13 +64,25 @@ declare global {
 
 const signingLog: SigningLogEntry[] = [];
 const permissionLog: PermissionLogEntry[] = [];
+const grantedPermissions = new Set<string>();
 let permissionBehavior: PermissionBehavior = "approve-all";
+let enforcePermissions = true;
 let connectionStatus = "connecting";
 let chainStatus = "connecting";
 let currentContainer: Container | null = null;
 let keyring: Keyring;
 const pairsByUri = new Map<string, KeyringPair>();
 const urisByPair = new Map<KeyringPair, string>();
+
+// ── Constants ─────────────────────────────────────────────────────
+
+/** Maps host-api device permission names to Permissions Policy directives (matching dot.li). */
+const DEVICE_PERMISSION_POLICY: Record<string, string> = {
+  Camera: "camera",
+  Microphone: "microphone",
+  Location: "geolocation",
+  Bluetooth: "bluetooth",
+};
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -108,6 +120,22 @@ function getPairByAddress(address: string): KeyringPair | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Build the iframe `allow` attribute from granted device permissions.
+ * Always includes clipboard directives; adds Permissions Policy directives
+ * for each granted device permission — matching dot.li's buildAllowAttribute.
+ */
+function buildAllowAttribute(): string {
+  const policies = ["clipboard-read", "clipboard-write"];
+  for (const tag of grantedPermissions) {
+    const directive = DEVICE_PERMISSION_POLICY[tag];
+    if (directive) {
+      policies.push(directive);
+    }
+  }
+  return policies.join("; ");
 }
 
 // ── Container setup ────────────────────────────────────────────────
@@ -154,7 +182,9 @@ function setupContainer(
     return ok(false);
   });
 
-  // ── Permissions (auto-approve in test environment) ──────────
+  // ── Permissions ─────────────────────────────────────────────
+  // Matches real host behavior: product must request permission
+  // before gated operations (e.g. signing requires TransactionSubmit).
 
   container.handlePermission((params, { ok }) => {
     let approved: boolean;
@@ -166,6 +196,10 @@ function setupContainer(
       approved = permissionBehavior(params.tag, params.value);
     }
 
+    if (approved) {
+      grantedPermissions.add(params.tag);
+    }
+
     permissionLog.push({
       tag: params.tag,
       value: params.value,
@@ -174,9 +208,56 @@ function setupContainer(
     });
 
     console.log(
-      `[test-host] Permission ${approved ? "approved" : "rejected"}:`,
+      `[test-host] Permission ${approved ? "granted" : "denied"}:`,
       params.tag,
     );
+    return ok(approved);
+  });
+
+  // ── Device permissions ─────────────────────────────────────────
+  // Matches real host behavior: product must request device permissions
+  // (Camera, Microphone, Location, Bluetooth). When granted, the iframe
+  // `allow` attribute is updated and the iframe reloads (matching dot.li).
+
+  container.handleDevicePermission((permission, { ok }) => {
+    let approved: boolean;
+    if (permissionBehavior === "approve-all") {
+      approved = true;
+    } else if (permissionBehavior === "reject-all") {
+      approved = false;
+    } else {
+      approved = permissionBehavior(permission, undefined);
+    }
+
+    if (approved) {
+      grantedPermissions.add(permission);
+    }
+
+    permissionLog.push({
+      tag: permission,
+      value: undefined,
+      approved,
+      timestamp: Date.now(),
+    });
+
+    console.log(
+      `[test-host] Device permission ${approved ? "granted" : "denied"}:`,
+      permission,
+    );
+
+    if (approved) {
+      // Update iframe allow attribute and reload — matching dot.li behavior.
+      // The iframe needs to reload for the new Permissions Policy to take effect.
+      const iframeEl = document.getElementById(
+        "product-frame",
+      ) as HTMLIFrameElement;
+      iframeEl.allow = buildAllowAttribute();
+      console.log(
+        "[test-host] Updated iframe allow:",
+        iframeEl.allow,
+      );
+    }
+
     return ok(approved);
   });
 
@@ -252,6 +333,14 @@ function setupContainer(
   // ── Sign payload (extrinsic) ─────────────────────────────────
 
   container.handleSignPayload((params, { ok, err }) => {
+    if (enforcePermissions && !grantedPermissions.has("TransactionSubmit")) {
+      console.error(
+        "[test-host] Signing rejected: product did not request TransactionSubmit permission. " +
+          "Call hostApi.permission({ tag: 'TransactionSubmit' }) first.",
+      );
+      return err(new SigningErr.PermissionDenied());
+    }
+
     const pair = getPairByAddress(params.address);
     if (!pair) {
       return err(
@@ -296,6 +385,13 @@ function setupContainer(
   // ── Sign raw ─────────────────────────────────────────────────
 
   container.handleSignRaw((params, { ok, err }) => {
+    if (enforcePermissions && !grantedPermissions.has("TransactionSubmit")) {
+      console.error(
+        "[test-host] Signing rejected: product did not request TransactionSubmit permission.",
+      );
+      return err(new SigningErr.PermissionDenied());
+    }
+
     const pair = getPairByAddress(params.address);
     if (!pair) {
       return err(
@@ -423,6 +519,35 @@ async function init(): Promise<void> {
 
     setPermissionBehavior(behavior: PermissionBehavior) {
       permissionBehavior = behavior;
+    },
+
+    grantPermission(tag: string) {
+      grantedPermissions.add(tag);
+      // If this is a device permission, update the iframe allow attribute
+      if (DEVICE_PERMISSION_POLICY[tag]) {
+        const iframeEl = document.getElementById(
+          "product-frame",
+        ) as HTMLIFrameElement;
+        iframeEl.allow = buildAllowAttribute();
+      }
+    },
+
+    revokePermission(tag: string) {
+      grantedPermissions.delete(tag);
+      if (DEVICE_PERMISSION_POLICY[tag]) {
+        const iframeEl = document.getElementById(
+          "product-frame",
+        ) as HTMLIFrameElement;
+        iframeEl.allow = buildAllowAttribute();
+      }
+    },
+
+    getGrantedPermissions() {
+      return [...grantedPermissions];
+    },
+
+    setEnforcePermissions(enforce: boolean) {
+      enforcePermissions = enforce;
     },
 
     getPermissionLog() {

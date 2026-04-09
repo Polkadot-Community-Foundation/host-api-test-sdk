@@ -102,6 +102,19 @@ export interface TestHostAPI {
   getChainStatus(): string;
   /** Set how the host responds to remote permission requests. */
   setPermissionBehavior(behavior: PermissionBehavior): void;
+  /** Pre-grant a permission without the product requesting it. */
+  grantPermission(tag: string): void;
+  /** Revoke a previously granted permission. */
+  revokePermission(tag: string): void;
+  /** List currently granted permissions. */
+  getGrantedPermissions(): string[];
+  /**
+   * Enable or disable permission enforcement on signing.
+   * When enabled (default), signing requires TransactionSubmit to have been
+   * granted — matching real host behavior. Disable for legacy tests that
+   * don't exercise the permission flow.
+   */
+  setEnforcePermissions(enforce: boolean): void;
   /** Get the log of all permission requests and their outcomes. */
   getPermissionLog(): PermissionLogEntry[];
   /** Clear the permission log. */

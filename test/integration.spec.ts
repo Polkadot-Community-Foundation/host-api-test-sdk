@@ -62,6 +62,21 @@ async function loadHost(page: import('@playwright/test').Page, hostUrl: string) 
   return page.frameLocator('#product-frame');
 }
 
+/** Get the product iframe as a Frame (supports evaluate, unlike FrameLocator). */
+function getProductFrame(page: import('@playwright/test').Page, productUrl: string) {
+  const frame = page.frames().find(f => f.url().startsWith(productUrl));
+  if (!frame) throw new Error('Product frame not found');
+  return frame;
+}
+
+/** Load host, wait for product to be ready, return the evaluable product frame. */
+async function loadHostAndProduct(page: import('@playwright/test').Page, hostUrl: string, productUrl: string) {
+  const frameLocator = await loadHost(page, hostUrl);
+  // Wait for root-keys to be ready (product fully initialized)
+  await expect(frameLocator.locator('#root-keys[data-ready="true"]')).toBeVisible({ timeout: 15_000 });
+  return getProductFrame(page, productUrl);
+}
+
 /** Read the public key hex that the test product received from the host. */
 async function getProductPublicKey(page: import('@playwright/test').Page, hostUrl: string): Promise<string> {
   const frame = await loadHost(page, hostUrl);
@@ -208,6 +223,197 @@ test.describe('Root (non-product) accounts', () => {
       const rootKeys = await getRootPublicKeys(page, host.url);
 
       expect(rootKeys).toEqual([bobKey, customKey]);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Permission enforcement ──────────────────────────────────────────
+
+test.describe('Permission enforcement', () => {
+
+  test('signing fails without TransactionSubmit permission', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Attempt signing without requesting permission first
+      const result = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
+      expect(result.ok).toBe(false);
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('signing succeeds after requesting TransactionSubmit permission', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Request permission first
+      const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestTransactionSubmit());
+      expect(permResult.ok).toBe(true);
+
+      // Now signing should work
+      const signResult = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
+      expect(signResult.ok).toBe(true);
+      expect(signResult.signature).toBeTruthy();
+
+      // Verify permission was logged on host side
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
+      expect(log.length).toBeGreaterThanOrEqual(1);
+      expect(log.some((e: any) => e.tag === 'TransactionSubmit' && e.approved)).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('signing succeeds when enforcement is disabled', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Disable enforcement
+      await page.evaluate(() => window.__TEST_HOST__.setEnforcePermissions(false));
+
+      // Signing works without permission request
+      const result = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
+      expect(result.ok).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('signing succeeds when permission is pre-granted via grantPermission', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Pre-grant without product requesting
+      await page.evaluate(() => window.__TEST_HOST__.grantPermission('TransactionSubmit'));
+
+      const result = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
+      expect(result.ok).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('signing fails when permission is rejected', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Set reject-all behavior
+      await page.evaluate(() => window.__TEST_HOST__.setPermissionBehavior('reject-all'));
+
+      // Product requests permission — gets rejected
+      const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestTransactionSubmit());
+      expect(permResult.ok).toBe(true); // request succeeded, but...
+      // approved could be false depending on result shape
+
+      // Signing should still fail since permission was rejected
+      const signResult = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
+      expect(signResult.ok).toBe(false);
+
+      // Permission log shows rejection
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
+      expect(log.some((e: any) => e.tag === 'TransactionSubmit' && !e.approved)).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Device permission handling ──────────────────────────────────────
+
+test.describe('Device permissions', () => {
+
+  test('device permission request is tracked and approved by default', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() => window.__TEST_PRODUCT__.requestDevicePermission('Camera'));
+      expect(result.ok).toBe(true);
+
+      // Verify it was logged
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
+      expect(log.some((e: any) => e.tag === 'Camera' && e.approved)).toBe(true);
+
+      // Verify it's in granted set
+      const granted = await page.evaluate(() => window.__TEST_HOST__.getGrantedPermissions());
+      expect(granted).toContain('Camera');
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('device permission is rejected when behavior is reject-all', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      await page.evaluate(() => window.__TEST_HOST__.setPermissionBehavior('reject-all'));
+
+      const result = await product.evaluate(() => window.__TEST_PRODUCT__.requestDevicePermission('Microphone'));
+      expect(result.ok).toBe(true); // request completed, check approved field
+
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
+      expect(log.some((e: any) => e.tag === 'Microphone' && !e.approved)).toBe(true);
+
+      const granted = await page.evaluate(() => window.__TEST_HOST__.getGrantedPermissions());
+      expect(granted).not.toContain('Microphone');
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('ExternalRequest permission is tracked', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.requestExternalRequest('https://example.com')
+      );
+      expect(result.ok).toBe(true);
+
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
+      expect(log.some((e: any) => e.tag === 'ExternalRequest' && e.approved)).toBe(true);
     } finally {
       await host.close();
     }
