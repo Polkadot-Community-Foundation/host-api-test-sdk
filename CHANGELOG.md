@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.0
+
+### Breaking changes
+
+- **Signing now requires `TransactionSubmit` permission** — matching real host behavior (polkadot-desktop, dot.li). Products must call `hostApi.permission({ tag: 'TransactionSubmit' })` before signing, otherwise the signing request will fail with a clear error. This catches products that skip the permission step — tests that passed before may now fail if the product wasn't requesting permission correctly.
+- **Device permissions now handled** — `handleDevicePermission` responds to Camera, Microphone, Location, and Bluetooth requests. When granted, the iframe `allow` attribute is updated with the corresponding Permissions Policy directive (matching dot.li). Products that don't request device permissions before using browser APIs will be blocked by the browser itself.
+
+### Migration from 0.4.x
+
+If your product already requests `TransactionSubmit` permission before signing, no changes needed.
+
+If your tests break, you have two options:
+
+**Option A** — fix the product (recommended): ensure your product calls `hostApi.permission({ tag: 'TransactionSubmit' })` before signing. This is what real hosts require.
+
+**Option B** — opt out of enforcement temporarily:
+```ts
+// In Playwright fixture
+await testHost.setEnforcePermissions(false);
+
+// Or via page.evaluate
+await page.evaluate(() => window.__TEST_HOST__.setEnforcePermissions(false));
+```
+
+### Added
+
+- `grantPermission(tag)` / `revokePermission(tag)` — pre-grant or revoke permissions from tests without the product requesting them
+- `getGrantedPermissions()` — inspect currently granted permissions
+- `setEnforcePermissions(enforce)` — enable/disable permission enforcement on signing
+
 ## 0.4.0
 
 ### Added

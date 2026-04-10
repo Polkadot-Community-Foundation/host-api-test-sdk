@@ -25,6 +25,18 @@ export interface TestHost {
   /** Set how the host responds to remote permission requests */
   setPermissionBehavior(behavior: PermissionBehavior): Promise<void>;
 
+  /** Pre-grant a permission without the product requesting it */
+  grantPermission(tag: string): Promise<void>;
+
+  /** Revoke a previously granted permission */
+  revokePermission(tag: string): Promise<void>;
+
+  /** List currently granted permissions */
+  getGrantedPermissions(): Promise<string[]>;
+
+  /** Enable or disable permission enforcement on signing (default: enabled) */
+  setEnforcePermissions(enforce: boolean): Promise<void>;
+
   /** Get the log of all permission requests and their outcomes */
   getPermissionLog(): Promise<PermissionLogEntry[]>;
 
@@ -89,6 +101,22 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
 
         async setPermissionBehavior(behavior: PermissionBehavior) {
           await page.evaluate((b) => window.__TEST_HOST__.setPermissionBehavior(b), behavior);
+        },
+
+        async grantPermission(tag: string) {
+          await page.evaluate((t) => window.__TEST_HOST__.grantPermission(t), tag);
+        },
+
+        async revokePermission(tag: string) {
+          await page.evaluate((t) => window.__TEST_HOST__.revokePermission(t), tag);
+        },
+
+        async getGrantedPermissions() {
+          return page.evaluate(() => window.__TEST_HOST__.getGrantedPermissions());
+        },
+
+        async setEnforcePermissions(enforce: boolean) {
+          await page.evaluate((e) => window.__TEST_HOST__.setEnforcePermissions(e), enforce);
         },
 
         async getPermissionLog() {
