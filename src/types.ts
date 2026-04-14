@@ -84,6 +84,53 @@ export interface PermissionLogEntry {
   timestamp: number;
 }
 
+export interface NavigationLogEntry {
+  url: string;
+  timestamp: number;
+}
+
+export interface NotificationLogEntry {
+  text: string;
+  deeplink: string | undefined;
+  timestamp: number;
+}
+
+export interface ChatRoom {
+  roomId: string;
+  name: string;
+  icon: string;
+  participatingAs: 'RoomHost' | 'Bot';
+}
+
+export interface ChatBot {
+  botId: string;
+  name: string;
+  icon: string;
+}
+
+export interface ChatMessageLogEntry {
+  roomId: string;
+  messageId: string;
+  /** Unmodified payload as received from the product. */
+  payload: unknown;
+  timestamp: number;
+}
+
+export interface PreimageEntry {
+  /** Hex-encoded blake2b-256 hash of the value. */
+  key: HexString;
+  value: Uint8Array;
+  /** When true, this preimage was submitted by the product via hostApi.preimageSubmit. */
+  fromProduct: boolean;
+  timestamp: number;
+}
+
+export interface StatementSubmissionLogEntry {
+  /** The signed statement as submitted, unmodified. */
+  statement: unknown;
+  timestamp: number;
+}
+
 /**
  * Controls how the test host responds to remote permission requests.
  * - `'approve-all'` — auto-approve every request (default)
@@ -119,5 +166,45 @@ export interface TestHostAPI {
   getPermissionLog(): PermissionLogEntry[];
   /** Clear the permission log. */
   clearPermissionLog(): void;
+  /** Get the log of navigation attempts (hostApi.navigateTo) from the product. */
+  getNavigationLog(): NavigationLogEntry[];
+  /** Clear the navigation log. */
+  clearNavigationLog(): void;
+  /** Get the log of push notifications (hostApi.pushNotification) from the product. */
+  getNotificationLog(): NotificationLogEntry[];
+  /** Clear the notification log. */
+  clearNotificationLog(): void;
+  /** List chat rooms the product has created in the current session. */
+  getChatRooms(): ChatRoom[];
+  /** List chat bots the product has registered in the current session. */
+  getChatBots(): ChatBot[];
+  /** Get the log of messages the product has posted to chat rooms. */
+  getChatMessageLog(): ChatMessageLogEntry[];
+  /** Clear chat state: rooms, bots, messages, and subscribers. */
+  clearChatState(): void;
+  /**
+   * Inject an incoming chat action (e.g. peer message) into the product.
+   * Any subscribers registered via `chatActionSubscribe` will receive it.
+   */
+  injectChatAction(action: { roomId: string; peer: string; payload: unknown }): void;
+  /** List all preimages known to the test host (submitted by product + seeded by test). */
+  getPreimages(): PreimageEntry[];
+  /**
+   * Seed the test host with a preimage value. The key is derived as
+   * blake2b-256 of the value and returned. Any active `preimageLookup`
+   * subscriptions for that key will be notified.
+   */
+  seedPreimage(value: Uint8Array): HexString;
+  /** Clear all preimages. */
+  clearPreimages(): void;
+  /** Get the log of statements submitted by the product via `hostApi.statementStoreSubmit`. */
+  getSubmittedStatements(): StatementSubmissionLogEntry[];
+  /**
+   * Inject a statement into the statement store so it is delivered to
+   * active subscribers whose topic filter matches.
+   */
+  injectStatement(statement: unknown): void;
+  /** Clear the submitted-statements log and any seeded statements. */
+  clearStatements(): void;
   dispose(): void;
 }

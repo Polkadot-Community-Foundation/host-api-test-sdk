@@ -68,6 +68,14 @@ describe('CJS require("@parity/host-api-test-sdk")', () => {
         html.includes('Permission') && html.includes('approved'),
         'has permission handler in bundle',
       );
+      assert.ok(
+        html.includes('Navigation requested'),
+        'has navigation handler in bundle',
+      );
+      assert.ok(
+        html.includes('[test-host] Notification'),
+        'has notification handler in bundle',
+      );
     });
   });
 

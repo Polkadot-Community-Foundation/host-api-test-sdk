@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+
+#### Navigation, notifications, account alias
+- **Navigation handler** — `handleNavigateTo` records `hostApi.navigateTo(url)` calls in a log without actually navigating. Inspect via `getNavigationLog()` / `clearNavigationLog()`.
+- **Push notification handler** — `handlePushNotification` records `hostApi.pushNotification({ text, deeplink })` calls. Inspect via `getNotificationLog()` / `clearNotificationLog()`.
+- **Account alias handler** — `handleAccountGetAlias` returns a deterministic `(context, alias)` pair derived from the account public key via BLAKE2b-256. Stable across runs for a given account.
+
+#### Chat
+- **Chat handlers** — `handleChatCreateRoom`, `handleChatBotRegistration`, `handleChatListSubscribe`, `handleChatPostMessage`, `handleChatActionSubscribe`. In-memory rooms/bots/messages. Inspect via `getChatRooms()`, `getChatBots()`, `getChatMessageLog()`.
+- `injectChatAction({ roomId, peer, payload })` — simulate an incoming message from a peer.
+- `clearChatState()` — wipe all chat state.
+
+#### Preimage store
+- **Preimage handlers** — `handlePreimageSubmit` stores the value and returns its BLAKE2b-256 key. `handlePreimageLookupSubscribe` delivers the value (or `null`) when queried, and notifies subscribers when a new preimage matching their key is submitted.
+- `seedPreimage(value)` — pre-populate the store from tests; returns the computed key.
+- `getPreimages()` / `clearPreimages()` — inspect or reset the store.
+
+#### Statement store
+- **Statement store handlers** — `handleStatementStoreSubscribe`, `handleStatementStoreCreateProof`, `handleStatementStoreSubmit`. In-memory statement storage with topic-based subscription filtering. Product accounts sign via sr25519 for `createProof`.
+- `getSubmittedStatements()` — log of what the product has submitted.
+- `injectStatement(statement)` — deliver a statement to matching subscribers without going through submit.
+- `clearStatements()` — reset all statement state.
+
+#### Types
+- **New exported types**: `NavigationLogEntry`, `NotificationLogEntry`, `ChatRoom`, `ChatBot`, `ChatMessageLogEntry`, `PreimageEntry`, `StatementSubmissionLogEntry`
+
+### Changed
+
+- **Per-session state reset** — permission grants, navigation log, notification log, chat state, preimages, and statement store are now cleared on container recreation (e.g. `setAccounts`), matching real host session behavior.
+
 ## 0.5.0
 
 ### Breaking changes
