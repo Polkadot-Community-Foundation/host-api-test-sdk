@@ -10,7 +10,7 @@
 
 import { createAccountsProvider, hostApi, sandboxTransport } from '@novasamatech/product-sdk';
 import { enumValue } from '@novasamatech/host-api';
-import { u8aToHex } from '@polkadot/util';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
 
 const DOTNS_ID = 'test-product.dot';
 const DERIVATION_INDEX = 0;
@@ -42,9 +42,28 @@ declare global {
       requestTransactionSubmit(): Promise<TestResult>;
       requestExternalRequest(url: string): Promise<TestResult>;
       requestDevicePermission(type: string): Promise<TestResult>;
+      navigateTo(url: string): Promise<TestResult>;
+      pushNotification(text: string, deeplink?: string): Promise<TestResult>;
+      getAccountAlias(dotnsId: string, index: number): Promise<TestResult & { context?: string; alias?: string }>;
+      chatCreateRoom(room: { roomId: string; name: string; icon: string }): Promise<TestResult & { status?: string }>;
+      chatRegisterBot(bot: { botId: string; name: string; icon: string }): Promise<TestResult & { status?: string }>;
+      chatPostTextMessage(roomId: string, text: string): Promise<TestResult & { messageId?: string }>;
+      /** Subscribes to chat actions and stores received actions in an array. Returns array reference for polling. */
+      subscribeChatActions(): { unsubscribe(): void };
+      getReceivedChatActions(): Array<unknown>;
+      clearReceivedChatActions(): void;
+      preimageSubmit(value: number[]): Promise<TestResult & { key?: string }>;
+      preimageLookup(key: string): Promise<TestResult & { value?: number[] | null }>;
+      statementSubmit(topicsHex: string[], dataHex: string): Promise<TestResult>;
+      statementSubscribe(topicsHex: string[]): { unsubscribe(): void };
+      getReceivedStatements(): Array<unknown>;
+      clearReceivedStatements(): void;
     };
   }
 }
+
+const receivedChatActions: unknown[] = [];
+const receivedStatements: unknown[] = [];
 
 async function init() {
   const el = document.getElementById('status')!;
@@ -145,6 +164,199 @@ async function init() {
         } catch (err) {
           return { ok: false, error: extractError(err) };
         }
+      },
+
+      async navigateTo(url: string): Promise<TestResult> {
+        try {
+          const r = await hostApi.navigateTo(enumValue('v1', url));
+          if (r.isOk()) {
+            return { ok: true };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async pushNotification(text: string, deeplink?: string): Promise<TestResult> {
+        try {
+          const r = await hostApi.pushNotification(enumValue('v1', { text, deeplink }));
+          if (r.isOk()) {
+            return { ok: true };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async getAccountAlias(dotnsId: string, index: number): Promise<TestResult & { context?: string; alias?: string }> {
+        try {
+          const r = await hostApi.accountGetAlias(enumValue('v1', [dotnsId, index]));
+          if (r.isOk()) {
+            return {
+              ok: true,
+              context: u8aToHex(r.value.value.context),
+              alias: u8aToHex(r.value.value.alias),
+            };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async chatCreateRoom(room: { roomId: string; name: string; icon: string }): Promise<TestResult & { status?: string }> {
+        try {
+          const r = await hostApi.chatCreateRoom(enumValue('v1', room));
+          if (r.isOk()) {
+            return { ok: true, status: r.value.value.status };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async chatRegisterBot(bot: { botId: string; name: string; icon: string }): Promise<TestResult & { status?: string }> {
+        try {
+          const r = await hostApi.chatRegisterBot(enumValue('v1', bot));
+          if (r.isOk()) {
+            return { ok: true, status: r.value.value.status };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async chatPostTextMessage(roomId: string, text: string): Promise<TestResult & { messageId?: string }> {
+        try {
+          const r = await hostApi.chatPostMessage(enumValue('v1', {
+            roomId,
+            payload: { tag: 'Text' as const, value: text },
+          }));
+          if (r.isOk()) {
+            return { ok: true, messageId: r.value.value.messageId };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      subscribeChatActions() {
+        const sub = hostApi.chatActionSubscribe(enumValue('v1', undefined), (payload: unknown) => {
+          // Unwrap the versioned envelope { tag: 'v1', value }
+          const p = payload as { tag?: string; value?: unknown };
+          receivedChatActions.push(p?.tag === 'v1' ? p.value : payload);
+        });
+        return {
+          unsubscribe() {
+            sub.unsubscribe();
+          },
+        };
+      },
+
+      getReceivedChatActions() {
+        return [...receivedChatActions];
+      },
+
+      clearReceivedChatActions() {
+        receivedChatActions.length = 0;
+      },
+
+      async preimageSubmit(value: number[]): Promise<TestResult & { key?: string }> {
+        try {
+          const r = await hostApi.preimageSubmit(enumValue('v1', new Uint8Array(value)));
+          if (r.isOk()) {
+            return { ok: true, key: r.value.value };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      preimageLookup(key: string): Promise<TestResult & { value?: number[] | null }> {
+        return new Promise((resolve) => {
+          let resolved = false;
+          const sub = hostApi.preimageLookupSubscribe(
+            enumValue('v1', key as `0x${string}`),
+            (payload: unknown) => {
+              if (resolved) return;
+              resolved = true;
+              // Unwrap version envelope
+              const p = payload as { tag?: string; value?: unknown };
+              const v = p?.tag === 'v1' ? p.value : payload;
+              sub.unsubscribe();
+              resolve({
+                ok: true,
+                value: v === null ? null : v === undefined ? null : Array.from(v as Uint8Array),
+              });
+            },
+          );
+          // Safety timeout
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              sub.unsubscribe();
+              resolve({ ok: false, error: 'timeout' });
+            }
+          }, 5000);
+        });
+      },
+
+      async statementSubmit(topicsHex: string[], dataHex: string): Promise<TestResult> {
+        try {
+          const topics = topicsHex.map(h => hexToU8a(h));
+          const data = hexToU8a(dataHex);
+          const pk = firstRootAddress ? hexToU8a(firstRootAddress) : new Uint8Array(32);
+          // Minimal signed statement; signature is a placeholder 64-byte zero
+          const statement = {
+            proof: {
+              tag: 'Sr25519' as const,
+              value: { signature: new Uint8Array(64), signer: pk },
+            },
+            decryptionKey: undefined,
+            expiry: 0n,
+            channel: undefined,
+            topics,
+            data,
+          };
+          const r = await hostApi.statementStoreSubmit(enumValue('v1', statement));
+          if (r.isOk()) return { ok: true };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      statementSubscribe(topicsHex: string[]) {
+        const topics = topicsHex.map(h => hexToU8a(h));
+        const sub = hostApi.statementStoreSubscribe(
+          enumValue('v1', topics),
+          (payload: unknown) => {
+            // Unwrap version envelope, then spread the array of statements
+            // (receive codec is Vector(SignedStatement)).
+            const p = payload as { tag?: string; value?: unknown };
+            const unwrapped = p?.tag === 'v1' ? p.value : payload;
+            if (Array.isArray(unwrapped)) {
+              for (const s of unwrapped) receivedStatements.push(s);
+            } else {
+              receivedStatements.push(unwrapped);
+            }
+          },
+        );
+        return { unsubscribe() { sub.unsubscribe(); } };
+      },
+
+      getReceivedStatements() {
+        return [...receivedStatements];
+      },
+
+      clearReceivedStatements() {
+        receivedStatements.length = 0;
       },
     };
   } catch (err) {

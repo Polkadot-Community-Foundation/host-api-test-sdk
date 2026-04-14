@@ -9,7 +9,12 @@
  * Exposes window.__TEST_HOST__ for Playwright control.
  */
 
-import { SigningErr } from "@novasamatech/host-api";
+import {
+  ChatMessagePostingErr,
+  NavigateToErr,
+  PreimageSubmitErr,
+  SigningErr,
+} from "@novasamatech/host-api";
 import type { Container } from "@novasamatech/host-container";
 import {
   createContainer,
@@ -19,14 +24,22 @@ import { Keyring } from "@polkadot/keyring";
 import type { KeyringPair } from "@polkadot/keyring/types";
 import { TypeRegistry } from "@polkadot/types";
 import { u8aToHex } from "@polkadot/util";
-import { cryptoWaitReady } from "@polkadot/util-crypto";
+import { blake2AsHex, blake2AsU8a, cryptoWaitReady } from "@polkadot/util-crypto";
 import { ResultAsync } from "neverthrow";
 import { getWsProvider } from "polkadot-api/ws-provider";
 
 import type {
+  ChatBot,
+  ChatMessageLogEntry,
+  ChatRoom,
+  HexString,
+  NavigationLogEntry,
+  NotificationLogEntry,
   PermissionBehavior,
   PermissionLogEntry,
+  PreimageEntry,
   SigningLogEntry,
+  StatementSubmissionLogEntry,
   TestHostAPI,
 } from "../types.js";
 
@@ -64,7 +77,26 @@ declare global {
 
 const signingLog: SigningLogEntry[] = [];
 const permissionLog: PermissionLogEntry[] = [];
+const navigationLog: NavigationLogEntry[] = [];
+const notificationLog: NotificationLogEntry[] = [];
 const grantedPermissions = new Set<string>();
+const chatRooms = new Map<string, ChatRoom>();
+const chatBots = new Map<string, ChatBot>();
+const chatMessageLog: ChatMessageLogEntry[] = [];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const chatActionSubscribers = new Set<(payload: any) => void>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const chatListSubscribers = new Set<(room: any) => void>();
+let chatMessageCounter = 0;
+/** preimages: hex key → entry */
+const preimages = new Map<string, PreimageEntry>();
+/** key → set of subscriber callbacks waiting for that preimage */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const preimageSubscribers = new Map<string, Set<(value: any) => void>>();
+const statementStore: unknown[] = [];
+const submittedStatements: StatementSubmissionLogEntry[] = [];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const statementSubscribers = new Set<{ topics: Uint8Array[]; send: (s: any) => void }>();
 let permissionBehavior: PermissionBehavior = "approve-all";
 let enforcePermissions = true;
 let connectionStatus = "connecting";
@@ -153,10 +185,23 @@ function setupContainer(
   config: HostConfig,
   accountsOverride?: AccountConfig[],
 ): Container {
-  // Reset permission state on container recreation — matches real hosts
-  // where permissions are per-session, not carried across reconnects.
+  // Reset permission and activity logs on container recreation — matches real
+  // hosts where permissions are per-session, not carried across reconnects.
   grantedPermissions.clear();
   permissionLog.length = 0;
+  navigationLog.length = 0;
+  notificationLog.length = 0;
+  chatRooms.clear();
+  chatBots.clear();
+  chatMessageLog.length = 0;
+  chatActionSubscribers.clear();
+  chatListSubscribers.clear();
+  chatMessageCounter = 0;
+  preimages.clear();
+  preimageSubscribers.clear();
+  statementStore.length = 0;
+  submittedStatements.length = 0;
+  statementSubscribers.clear();
 
   const provider = createIframeProvider({ iframe, url: config.productUrl });
   const container = createContainer(provider);
@@ -337,6 +382,29 @@ function setupContainer(
     return () => {};
   });
 
+  // Ring VRF alias: real hosts derive a context-specific alias via
+  // session.getRingVrfAlias(). For test purposes, return a deterministic
+  // (context, alias) pair derived from the product account — stable across
+  // runs so tests can assert exact values if needed.
+  container.handleAccountGetAlias((params, { ok }) => {
+    const key = `${params[0]}/${params[1]}`;
+    const override = config.productAccounts?.[key];
+    const pair = override
+      ? getPair(override.uri)
+      : getPair(`${urisByPair.get(pairs[0].pair)}//${params[0]}/${params[1]}`);
+
+    // Deterministic 32-byte context and alias from the account's public key.
+    const context = blake2AsU8a(
+      new Uint8Array([...pair.publicKey, ...new TextEncoder().encode("context")]),
+      256,
+    );
+    const alias = blake2AsU8a(
+      new Uint8Array([...pair.publicKey, ...new TextEncoder().encode("alias")]),
+      256,
+    );
+    return ok({ context, alias });
+  });
+
   // ── Sign payload (extrinsic) ─────────────────────────────────
 
   container.handleSignPayload((params, { ok, err }) => {
@@ -442,6 +510,242 @@ function setupContainer(
   container.handleLocalStorageClear((key, { ok }) => {
     const storageKey = `test-host:${key}`;
     localStorage.removeItem(storageKey);
+    return ok(undefined);
+  });
+
+  // ── Navigation ───────────────────────────────────────────────
+  // Real hosts parse dot.li URLs and route within the app or open externally.
+  // The test host records intents so tests can assert what the product tried
+  // to navigate to, without actually navigating.
+
+  container.handleNavigateTo((url, { ok, err }) => {
+    if (typeof url !== "string" || url.length === 0) {
+      return err(new NavigateToErr.Unknown({ reason: "Empty URL" }));
+    }
+    navigationLog.push({ url, timestamp: Date.now() });
+    console.log("[test-host] Navigation requested:", url);
+    return ok(undefined);
+  });
+
+  // ── Push notifications ───────────────────────────────────────
+  // Real hosts surface system notifications with optional deeplink click handlers.
+  // The test host records notifications so tests can assert what was sent.
+
+  container.handlePushNotification((params, { ok }) => {
+    notificationLog.push({
+      text: params.text,
+      deeplink: params.deeplink,
+      timestamp: Date.now(),
+    });
+    console.log(
+      "[test-host] Notification:",
+      params.text,
+      params.deeplink ? `(deeplink: ${params.deeplink})` : "",
+    );
+    return ok(undefined);
+  });
+
+  // ── Chat ─────────────────────────────────────────────────────
+  // In-memory chat implementation: tracks product-created rooms and bots,
+  // logs posted messages, and allows tests to inject incoming actions
+  // through `injectChatAction`. Real hosts back these via Matrix.
+
+  container.handleChatCreateRoom((params, { ok }) => {
+    const exists = chatRooms.has(params.roomId);
+    if (!exists) {
+      const room: ChatRoom = {
+        roomId: params.roomId,
+        name: params.name,
+        icon: params.icon,
+        participatingAs: "RoomHost",
+      };
+      chatRooms.set(params.roomId, room);
+      for (const subscriber of chatListSubscribers) {
+        subscriber({
+          roomId: room.roomId,
+          participatingAs: room.participatingAs,
+        });
+      }
+    }
+    return ok({ status: exists ? "Exists" : "New" });
+  });
+
+  container.handleChatBotRegistration((params, { ok }) => {
+    const exists = chatBots.has(params.botId);
+    if (!exists) {
+      chatBots.set(params.botId, {
+        botId: params.botId,
+        name: params.name,
+        icon: params.icon,
+      });
+    }
+    return ok({ status: exists ? "Exists" : "New" });
+  });
+
+  container.handleChatListSubscribe((_, send) => {
+    // Send current rooms on subscribe
+    for (const room of chatRooms.values()) {
+      send({ roomId: room.roomId, participatingAs: room.participatingAs });
+    }
+    chatListSubscribers.add(send);
+    return () => {
+      chatListSubscribers.delete(send);
+    };
+  });
+
+  container.handleChatPostMessage((params, { ok, err }) => {
+    if (!chatRooms.has(params.roomId)) {
+      return err(
+        new ChatMessagePostingErr.Unknown({
+          reason: `Room does not exist: ${params.roomId}`,
+        }),
+      );
+    }
+    chatMessageCounter += 1;
+    const messageId = `msg-${chatMessageCounter}`;
+    chatMessageLog.push({
+      roomId: params.roomId,
+      messageId,
+      payload: params.payload,
+      timestamp: Date.now(),
+    });
+    return ok({ messageId });
+  });
+
+  container.handleChatActionSubscribe((_, send) => {
+    chatActionSubscribers.add(send);
+    return () => {
+      chatActionSubscribers.delete(send);
+    };
+  });
+
+  // ── Preimage store ───────────────────────────────────────────
+  // In-memory preimage storage. Key = blake2b-256(value), matching how
+  // preimages are identified on Polkadot. Real hosts submit via Bulletin
+  // chain + fetch via IPFS; this is a simple lookup table.
+
+  container.handlePreimageLookupSubscribe((key, send) => {
+    const keyStr = String(key).toLowerCase();
+    const existing = preimages.get(keyStr);
+    send(existing ? existing.value : null);
+
+    let subs = preimageSubscribers.get(keyStr);
+    if (!subs) {
+      subs = new Set();
+      preimageSubscribers.set(keyStr, subs);
+    }
+    subs.add(send);
+
+    return () => {
+      const s = preimageSubscribers.get(keyStr);
+      if (s) {
+        s.delete(send);
+        if (s.size === 0) preimageSubscribers.delete(keyStr);
+      }
+    };
+  });
+
+  container.handlePreimageSubmit((value, { ok, err }) => {
+    try {
+      const key = blake2AsHex(value, 256) as HexString;
+      const entry: PreimageEntry = {
+        key,
+        value,
+        fromProduct: true,
+        timestamp: Date.now(),
+      };
+      preimages.set(key.toLowerCase(), entry);
+
+      // Notify any subscribers waiting for this key
+      const subs = preimageSubscribers.get(key.toLowerCase());
+      if (subs) {
+        for (const subscriber of subs) subscriber(value);
+      }
+
+      return ok(key);
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      return err(new PreimageSubmitErr.Unknown({ reason }));
+    }
+  });
+
+  // ── Statement store ──────────────────────────────────────────
+  // In-memory statement storage. Topics are Uint8Array[]; a statement
+  // matches a subscription if the subscription topics are a subset of the
+  // statement's topics (simple filter). Real hosts back this via the
+  // @novasamatech/statement-store SDK.
+
+  container.handleStatementStoreSubscribe((topics, send) => {
+    const matchesFilter = (statement: unknown): boolean => {
+      if (topics.length === 0) return true; // empty filter matches all
+      const stmt = statement as { topics?: Uint8Array[] };
+      if (!stmt.topics) return false;
+      const stmtTopicsHex = stmt.topics.map((t) => u8aToHex(t));
+      return topics.every((filterTopic) =>
+        stmtTopicsHex.includes(u8aToHex(filterTopic)),
+      );
+    };
+
+    // The receive codec is Vector(SignedStatement), so send batches (even if
+    // single-item) as arrays.
+    const batchSend = (statement: unknown) => {
+      send([statement] as never);
+    };
+
+    // Send current matching statements as one batch
+    const current = statementStore.filter(matchesFilter);
+    if (current.length > 0) send(current as never);
+
+    const subscriber = { topics: [...topics], send: batchSend };
+    statementSubscribers.add(subscriber);
+
+    return () => {
+      statementSubscribers.delete(subscriber);
+    };
+  });
+
+  container.handleStatementStoreCreateProof((params, { ok }) => {
+    // Resolve the product account's keypair, then sign the raw statement
+    // data with sr25519. This produces a valid Sr25519 proof shape that
+    // downstream verification can check.
+    const [[dotnsId, idx], statement] = params;
+    const key = `${dotnsId}/${idx}`;
+    const override = config.productAccounts?.[key];
+    const pair = override
+      ? getPair(override.uri)
+      : getPair(`${urisByPair.get(pairs[0].pair)}//${dotnsId}/${idx}`);
+
+    // Canonical message: for test purposes, sign the data field (or empty).
+    const dataToSign =
+      (statement as { data?: Uint8Array }).data ?? new Uint8Array();
+    const signature = pair.sign(dataToSign);
+
+    return ok({
+      tag: "Sr25519",
+      value: {
+        signature,
+        signer: pair.publicKey,
+      },
+    });
+  });
+
+  container.handleStatementStoreSubmit((statement, { ok }) => {
+    statementStore.push(statement);
+    submittedStatements.push({
+      statement,
+      timestamp: Date.now(),
+    });
+
+    // Deliver to matching subscribers
+    const stmt = statement as { topics?: Uint8Array[] };
+    const stmtTopicsHex = (stmt.topics ?? []).map((t) => u8aToHex(t));
+    for (const sub of statementSubscribers) {
+      const matches =
+        sub.topics.length === 0 ||
+        sub.topics.every((t) => stmtTopicsHex.includes(u8aToHex(t)));
+      if (matches) sub.send(statement as never);
+    }
+
     return ok(undefined);
   });
 
@@ -552,6 +856,93 @@ async function init(): Promise<void> {
 
     clearPermissionLog() {
       permissionLog.length = 0;
+    },
+
+    getNavigationLog() {
+      return [...navigationLog];
+    },
+
+    clearNavigationLog() {
+      navigationLog.length = 0;
+    },
+
+    getNotificationLog() {
+      return [...notificationLog];
+    },
+
+    clearNotificationLog() {
+      notificationLog.length = 0;
+    },
+
+    getChatRooms() {
+      return [...chatRooms.values()];
+    },
+
+    getChatBots() {
+      return [...chatBots.values()];
+    },
+
+    getChatMessageLog() {
+      return [...chatMessageLog];
+    },
+
+    clearChatState() {
+      chatRooms.clear();
+      chatBots.clear();
+      chatMessageLog.length = 0;
+      chatActionSubscribers.clear();
+      chatListSubscribers.clear();
+      chatMessageCounter = 0;
+    },
+
+    injectChatAction(action: { roomId: string; peer: string; payload: unknown }) {
+      for (const subscriber of chatActionSubscribers) {
+        subscriber(action);
+      }
+    },
+
+    getPreimages() {
+      return [...preimages.values()];
+    },
+
+    seedPreimage(value: Uint8Array) {
+      const key = blake2AsHex(value, 256) as HexString;
+      preimages.set(key.toLowerCase(), {
+        key,
+        value,
+        fromProduct: false,
+        timestamp: Date.now(),
+      });
+      const subs = preimageSubscribers.get(key.toLowerCase());
+      if (subs) {
+        for (const s of subs) s(value);
+      }
+      return key;
+    },
+
+    clearPreimages() {
+      preimages.clear();
+    },
+
+    getSubmittedStatements() {
+      return [...submittedStatements];
+    },
+
+    injectStatement(statement: unknown) {
+      statementStore.push(statement);
+      const stmt = statement as { topics?: Uint8Array[] };
+      const stmtTopicsHex = (stmt.topics ?? []).map((t) => u8aToHex(t));
+      for (const sub of statementSubscribers) {
+        const matches =
+          sub.topics.length === 0 ||
+          sub.topics.every((t) => stmtTopicsHex.includes(u8aToHex(t)));
+        if (matches) sub.send(statement as never);
+      }
+    },
+
+    clearStatements() {
+      statementStore.length = 0;
+      submittedStatements.length = 0;
     },
 
     dispose() {

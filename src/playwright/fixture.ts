@@ -1,7 +1,7 @@
 import type { Page, FrameLocator } from '@playwright/test';
 import { createTestHostServer } from '../server.js';
 import { DEFAULT_CHAIN } from '../chains.js';
-import type { CreateTestHostOptions, DevAccountName, PermissionBehavior, PermissionLogEntry, SigningLogEntry, TestHostAPI } from '../types.js';
+import type { ChatBot, ChatMessageLogEntry, ChatRoom, CreateTestHostOptions, DevAccountName, HexString, NavigationLogEntry, NotificationLogEntry, PermissionBehavior, PermissionLogEntry, PreimageEntry, SigningLogEntry, StatementSubmissionLogEntry, TestHostAPI } from '../types.js';
 
 export interface TestHost {
   /** The host page (contains the iframe) */
@@ -42,6 +42,51 @@ export interface TestHost {
 
   /** Clear the permission log */
   clearPermissionLog(): Promise<void>;
+
+  /** Get the log of navigation attempts from the product */
+  getNavigationLog(): Promise<NavigationLogEntry[]>;
+
+  /** Clear the navigation log */
+  clearNavigationLog(): Promise<void>;
+
+  /** Get the log of push notifications from the product */
+  getNotificationLog(): Promise<NotificationLogEntry[]>;
+
+  /** Clear the notification log */
+  clearNotificationLog(): Promise<void>;
+
+  /** List chat rooms the product has created in the current session */
+  getChatRooms(): Promise<ChatRoom[]>;
+
+  /** List chat bots the product has registered in the current session */
+  getChatBots(): Promise<ChatBot[]>;
+
+  /** Get the log of messages posted by the product */
+  getChatMessageLog(): Promise<ChatMessageLogEntry[]>;
+
+  /** Clear all chat state (rooms, bots, messages, subscribers) */
+  clearChatState(): Promise<void>;
+
+  /** Inject an incoming chat action (peer message) into the product */
+  injectChatAction(action: { roomId: string; peer: string; payload: unknown }): Promise<void>;
+
+  /** List preimages known to the test host (submitted + seeded) */
+  getPreimages(): Promise<PreimageEntry[]>;
+
+  /** Seed a preimage value; returns its key (blake2b-256 hash). */
+  seedPreimage(value: Uint8Array): Promise<HexString>;
+
+  /** Clear all preimages */
+  clearPreimages(): Promise<void>;
+
+  /** Get the log of statements submitted by the product */
+  getSubmittedStatements(): Promise<StatementSubmissionLogEntry[]>;
+
+  /** Inject a statement into the store; delivers to matching subscribers */
+  injectStatement(statement: unknown): Promise<void>;
+
+  /** Clear all statements */
+  clearStatements(): Promise<void>;
 
   /** Wait until the product-sdk has connected to the host container */
   waitForConnection(timeout?: number): Promise<void>;
@@ -125,6 +170,69 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
 
         async clearPermissionLog() {
           await page.evaluate(() => window.__TEST_HOST__.clearPermissionLog());
+        },
+
+        async getNavigationLog() {
+          return page.evaluate(() => window.__TEST_HOST__.getNavigationLog());
+        },
+
+        async clearNavigationLog() {
+          await page.evaluate(() => window.__TEST_HOST__.clearNavigationLog());
+        },
+
+        async getNotificationLog() {
+          return page.evaluate(() => window.__TEST_HOST__.getNotificationLog());
+        },
+
+        async clearNotificationLog() {
+          await page.evaluate(() => window.__TEST_HOST__.clearNotificationLog());
+        },
+
+        async getChatRooms() {
+          return page.evaluate(() => window.__TEST_HOST__.getChatRooms());
+        },
+
+        async getChatBots() {
+          return page.evaluate(() => window.__TEST_HOST__.getChatBots());
+        },
+
+        async getChatMessageLog() {
+          return page.evaluate(() => window.__TEST_HOST__.getChatMessageLog());
+        },
+
+        async clearChatState() {
+          await page.evaluate(() => window.__TEST_HOST__.clearChatState());
+        },
+
+        async injectChatAction(action: { roomId: string; peer: string; payload: unknown }) {
+          await page.evaluate((a) => window.__TEST_HOST__.injectChatAction(a), action);
+        },
+
+        async getPreimages() {
+          return page.evaluate(() => window.__TEST_HOST__.getPreimages());
+        },
+
+        async seedPreimage(value: Uint8Array) {
+          return page.evaluate(
+            (bytes) => window.__TEST_HOST__.seedPreimage(new Uint8Array(bytes)),
+            Array.from(value),
+          );
+        },
+
+        async clearPreimages() {
+          await page.evaluate(() => window.__TEST_HOST__.clearPreimages());
+        },
+
+        async getSubmittedStatements() {
+          return page.evaluate(() => window.__TEST_HOST__.getSubmittedStatements());
+        },
+
+        async injectStatement(statement: unknown) {
+          await page.evaluate((s) => window.__TEST_HOST__.injectStatement(s), statement);
+        },
+
+        async clearStatements() {
+          await page.evaluate(() => window.__TEST_HOST__.clearStatements());
         },
 
         async waitForConnection(timeout = 30_000) {
