@@ -11,14 +11,20 @@
 
 import {
   ChatMessagePostingErr,
+  DeriveEntropyErr,
+  LoginErr,
   NavigateToErr,
+  PaymentRequestErr,
+  PaymentTopUpErr,
   PreimageSubmitErr,
+  RequestCredentialsErr,
   SigningErr,
 } from "@novasamatech/host-api";
 import type { Container } from "@novasamatech/host-container";
 import {
   createContainer,
   createIframeProvider,
+  deriveProductEntropy,
 } from "@novasamatech/host-container";
 import { Keyring } from "@polkadot/keyring";
 import type { KeyringPair } from "@polkadot/keyring/types";
@@ -26,15 +32,17 @@ import { TypeRegistry } from "@polkadot/types";
 import { u8aToHex } from "@polkadot/util";
 import { blake2AsHex, blake2AsU8a, cryptoWaitReady } from "@polkadot/util-crypto";
 import { ResultAsync } from "neverthrow";
-import { getWsProvider } from "polkadot-api/ws-provider";
+import { getWsProvider } from "polkadot-api/ws";
 
 import type {
   ChatBot,
   ChatMessageLogEntry,
   ChatRoom,
   HexString,
+  LoginBehavior,
   NavigationLogEntry,
   NotificationLogEntry,
+  PaymentLogEntry,
   PermissionBehavior,
   PermissionLogEntry,
   PreimageEntry,
@@ -96,7 +104,20 @@ const preimageSubscribers = new Map<string, Set<(value: any) => void>>();
 const statementStore: unknown[] = [];
 const submittedStatements: StatementSubmissionLogEntry[] = [];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const statementSubscribers = new Set<{ topics: Uint8Array[]; send: (s: any) => void }>();
+const statementSubscribers = new Set<{ filter: { tag: string; value: Uint8Array[] }; send: (s: any) => void }>();
+const paymentLog: PaymentLogEntry[] = [];
+let paymentBalance: bigint = 0n;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const paymentBalanceSubscribers = new Set<(balance: any) => void>();
+const paymentStatuses = new Map<string, { tag: string; value?: string }>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const paymentStatusSubscribers = new Map<string, Set<(status: any) => void>>();
+let paymentCounter = 0;
+let currentTheme: "light" | "dark" = "light";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const themeSubscribers = new Set<(theme: any) => void>();
+let loginBehavior: LoginBehavior = "success";
+let isAuthenticated = true;
 let permissionBehavior: PermissionBehavior = "approve-all";
 let enforcePermissions = true;
 let connectionStatus = "connecting";
@@ -114,6 +135,9 @@ const DEVICE_PERMISSION_POLICY: Record<string, string> = {
   Microphone: "microphone",
   Location: "geolocation",
   Bluetooth: "bluetooth",
+  NFC: "nfc",
+  Clipboard: "clipboard-read",
+  Biometrics: "publickey-credentials-get",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -152,6 +176,23 @@ function getPairByAddress(address: string): KeyringPair | undefined {
     }
   }
   return undefined;
+}
+
+/** Resolve a product account [dotnsId, derivationIndex] to a keypair. */
+function getPairForProductAccount(
+  config: HostConfig,
+  pairs: { pair: KeyringPair; name: string }[],
+  dotnsId: string,
+  idx: number,
+): KeyringPair | undefined {
+  const key = `${dotnsId}/${idx}`;
+  const override = config.productAccounts?.[key];
+  if (override) {
+    return getPair(override.uri);
+  }
+  if (pairs.length === 0) return undefined;
+  const selectedAccUri = urisByPair.get(pairs[0].pair);
+  return getPair(`${selectedAccUri}//${dotnsId}/${idx}`);
 }
 
 /**
@@ -202,6 +243,13 @@ function setupContainer(
   statementStore.length = 0;
   submittedStatements.length = 0;
   statementSubscribers.clear();
+  paymentLog.length = 0;
+  paymentBalance = 0n;
+  paymentBalanceSubscribers.clear();
+  paymentStatuses.clear();
+  paymentStatusSubscribers.clear();
+  paymentCounter = 0;
+  themeSubscribers.clear();
 
   const provider = createIframeProvider({ iframe, url: config.productUrl });
   const container = createContainer(provider);
@@ -245,31 +293,37 @@ function setupContainer(
   // before gated operations (e.g. signing requires TransactionSubmit).
 
   container.handlePermission((params, { ok }) => {
-    let approved: boolean;
-    if (permissionBehavior === "approve-all") {
-      approved = true;
-    } else if (permissionBehavior === "reject-all") {
-      approved = false;
-    } else {
-      approved = permissionBehavior(params.tag, params.value);
+    // params is now RemotePermission[] (batched). Approve if all pass.
+    let allApproved = true;
+    for (const perm of params) {
+      let approved: boolean;
+      if (permissionBehavior === "approve-all") {
+        approved = true;
+      } else if (permissionBehavior === "reject-all") {
+        approved = false;
+      } else {
+        approved = permissionBehavior(perm.tag, perm.value);
+      }
+
+      if (approved) {
+        grantedPermissions.add(perm.tag);
+      } else {
+        allApproved = false;
+      }
+
+      permissionLog.push({
+        tag: perm.tag,
+        value: perm.value,
+        approved,
+        timestamp: Date.now(),
+      });
+
+      console.log(
+        `[test-host] Permission ${approved ? "granted" : "denied"}:`,
+        perm.tag,
+      );
     }
-
-    if (approved) {
-      grantedPermissions.add(params.tag);
-    }
-
-    permissionLog.push({
-      tag: params.tag,
-      value: params.value,
-      approved,
-      timestamp: Date.now(),
-    });
-
-    console.log(
-      `[test-host] Permission ${approved ? "granted" : "denied"}:`,
-      params.tag,
-    );
-    return ok(approved);
+    return ok(allApproved);
   });
 
   // ── Device permissions ─────────────────────────────────────────
@@ -338,7 +392,7 @@ function setupContainer(
 
   // ── Accounts ─────────────────────────────────────────────────
 
-  container.handleGetNonProductAccounts((_, { ok }) => {
+  container.handleGetLegacyAccounts((_, { ok }) => {
     return ok(
       pairs.map(({ pair, name }) => ({
         publicKey: pair.publicKey,
@@ -408,19 +462,21 @@ function setupContainer(
   // ── Sign payload (extrinsic) ─────────────────────────────────
 
   container.handleSignPayload((params, { ok, err }) => {
-    if (enforcePermissions && !grantedPermissions.has("TransactionSubmit")) {
+    if (enforcePermissions && !grantedPermissions.has("ChainSubmit")) {
       console.error(
-        "[test-host] Signing rejected: product did not request TransactionSubmit permission. " +
-          "Call hostApi.permission({ tag: 'TransactionSubmit' }) first.",
+        "[test-host] Signing rejected: product did not request ChainSubmit permission. " +
+          "Call hostApi.permission([{ tag: 'ChainSubmit' }]) first.",
       );
       return err(new SigningErr.PermissionDenied());
     }
 
-    const pair = getPairByAddress(params.address);
+    // params.account is [dotnsId, derivationIndex]
+    const [dotnsId, idx] = params.account;
+    const pair = getPairForProductAccount(config, pairs, dotnsId, idx);
     if (!pair) {
       return err(
         new SigningErr.Unknown({
-          reason: `No keypair for address: ${params.address}`,
+          reason: `No keypair for product account: ${dotnsId}/${idx}`,
         }),
       );
     }
@@ -434,15 +490,13 @@ function setupContainer(
     return ResultAsync.fromPromise(
       (async () => {
         const registry = new TypeRegistry();
-        registry.setSignedExtensions(params.signedExtensions);
+        registry.setSignedExtensions(params.payload.signedExtensions);
         const extrinsicPayload = registry.createType(
           "ExtrinsicPayload",
-          params,
-          { version: params.version },
+          params.payload,
+          { version: params.payload.version },
         );
 
-        // extrinsicPayload.sign() returns { signature: HexString } — already hex-encoded.
-        // Do NOT apply u8aToHex() again (that would double-encode).
         const { signature } = extrinsicPayload.sign(pair);
         return {
           signature: signature as `0x${string}`,
@@ -460,18 +514,20 @@ function setupContainer(
   // ── Sign raw ─────────────────────────────────────────────────
 
   container.handleSignRaw((params, { ok, err }) => {
-    if (enforcePermissions && !grantedPermissions.has("TransactionSubmit")) {
+    if (enforcePermissions && !grantedPermissions.has("ChainSubmit")) {
       console.error(
-        "[test-host] Signing rejected: product did not request TransactionSubmit permission.",
+        "[test-host] Signing rejected: product did not request ChainSubmit permission.",
       );
       return err(new SigningErr.PermissionDenied());
     }
 
-    const pair = getPairByAddress(params.address);
+    // params.account is [dotnsId, derivationIndex]
+    const [dotnsId, idx] = params.account;
+    const pair = getPairForProductAccount(config, pairs, dotnsId, idx);
     if (!pair) {
       return err(
         new SigningErr.Unknown({
-          reason: `No keypair for address: ${params.address}`,
+          reason: `No keypair for product account: ${dotnsId}/${idx}`,
         }),
       );
     }
@@ -479,11 +535,10 @@ function setupContainer(
     signingLog.push({ type: "raw", payload: params, timestamp: Date.now() });
 
     let dataToSign: Uint8Array;
-    if (params.data.tag === "Bytes") {
-      dataToSign = params.data.value;
+    if (params.payload.tag === "Bytes") {
+      dataToSign = params.payload.value;
     } else {
-      // Payload string — encode as UTF-8 bytes
-      dataToSign = new TextEncoder().encode(params.data.value);
+      dataToSign = new TextEncoder().encode(params.payload.value);
     }
 
     const signature = pair.sign(dataToSign);
@@ -491,6 +546,83 @@ function setupContainer(
       signature: u8aToHex(signature) as `0x${string}`,
       signedTransaction: undefined,
     });
+  });
+
+  // ── Sign with legacy account (address-based) ───────────────
+
+  container.handleSignPayloadWithLegacyAccount((params, { ok, err }) => {
+    if (enforcePermissions && !grantedPermissions.has("ChainSubmit")) {
+      return err(new SigningErr.PermissionDenied());
+    }
+
+    const pair = getPairByAddress(params.signer);
+    if (!pair) {
+      return err(
+        new SigningErr.Unknown({
+          reason: `No keypair for signer: ${params.signer}`,
+        }),
+      );
+    }
+
+    signingLog.push({ type: "payload", payload: params, timestamp: Date.now() });
+
+    return ResultAsync.fromPromise(
+      (async () => {
+        const registry = new TypeRegistry();
+        registry.setSignedExtensions(params.payload.signedExtensions);
+        const extrinsicPayload = registry.createType(
+          "ExtrinsicPayload",
+          params.payload,
+          { version: params.payload.version },
+        );
+        const { signature } = extrinsicPayload.sign(pair);
+        return {
+          signature: signature as `0x${string}`,
+          signedTransaction: undefined,
+        };
+      })(),
+      (e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        return new SigningErr.Unknown({ reason: msg });
+      },
+    );
+  });
+
+  container.handleSignRawWithLegacyAccount((params, { ok, err }) => {
+    if (enforcePermissions && !grantedPermissions.has("ChainSubmit")) {
+      return err(new SigningErr.PermissionDenied());
+    }
+
+    const pair = getPairByAddress(params.signer);
+    if (!pair) {
+      return err(
+        new SigningErr.Unknown({
+          reason: `No keypair for signer: ${params.signer}`,
+        }),
+      );
+    }
+
+    signingLog.push({ type: "raw", payload: params, timestamp: Date.now() });
+
+    let dataToSign: Uint8Array;
+    if (params.payload.tag === "Bytes") {
+      dataToSign = params.payload.value;
+    } else {
+      dataToSign = new TextEncoder().encode(params.payload.value);
+    }
+
+    const signature = pair.sign(dataToSign);
+    return ok({
+      signature: u8aToHex(signature) as `0x${string}`,
+      signedTransaction: undefined,
+    });
+  });
+
+  // ── Create transaction with legacy account ──────────────────
+
+  container.handleCreateTransactionWithLegacyAccount((params, { ok, err }) => {
+    // For test purposes, just return the call data as-is
+    return ok(params.callData);
   });
 
   // ── Local storage (scoped per test) ──────────────────────────
@@ -675,28 +807,35 @@ function setupContainer(
   // statement's topics (simple filter). Real hosts back this via the
   // @novasamatech/statement-store SDK.
 
-  container.handleStatementStoreSubscribe((topics, send) => {
+  container.handleStatementStoreSubscribe((topicFilter, send) => {
+    // topicFilter: { tag: 'MatchAll' | 'MatchAny', value: Uint8Array[] }
     const matchesFilter = (statement: unknown): boolean => {
-      if (topics.length === 0) return true; // empty filter matches all
+      const filterTopics = topicFilter.value;
+      if (filterTopics.length === 0) return true;
       const stmt = statement as { topics?: Uint8Array[] };
       if (!stmt.topics) return false;
       const stmtTopicsHex = stmt.topics.map((t) => u8aToHex(t));
-      return topics.every((filterTopic) =>
-        stmtTopicsHex.includes(u8aToHex(filterTopic)),
+      if (topicFilter.tag === "MatchAll") {
+        return filterTopics.every((ft) =>
+          stmtTopicsHex.includes(u8aToHex(ft)),
+        );
+      }
+      // MatchAny
+      return filterTopics.some((ft) =>
+        stmtTopicsHex.includes(u8aToHex(ft)),
       );
     };
 
-    // The receive codec is Vector(SignedStatement), so send batches (even if
-    // single-item) as arrays.
-    const batchSend = (statement: unknown) => {
-      send([statement] as never);
+    // Send as SignedStatementsPage { statements, isComplete }
+    const pageSend = (statement: unknown) => {
+      send({ statements: [statement], isComplete: true } as never);
     };
 
-    // Send current matching statements as one batch
+    // Send current matching statements as initial dump
     const current = statementStore.filter(matchesFilter);
-    if (current.length > 0) send(current as never);
+    send({ statements: current, isComplete: true } as never);
 
-    const subscriber = { topics: [...topics], send: batchSend };
+    const subscriber = { filter: topicFilter, send: pageSend };
     statementSubscribers.add(subscriber);
 
     return () => {
@@ -736,17 +875,171 @@ function setupContainer(
       timestamp: Date.now(),
     });
 
-    // Deliver to matching subscribers
+    // Deliver to matching subscribers using TopicFilter semantics
     const stmt = statement as { topics?: Uint8Array[] };
     const stmtTopicsHex = (stmt.topics ?? []).map((t) => u8aToHex(t));
     for (const sub of statementSubscribers) {
-      const matches =
-        sub.topics.length === 0 ||
-        sub.topics.every((t) => stmtTopicsHex.includes(u8aToHex(t)));
+      const filterTopics = sub.filter.value;
+      let matches: boolean;
+      if (filterTopics.length === 0) {
+        matches = true;
+      } else if (sub.filter.tag === "MatchAll") {
+        matches = filterTopics.every((t) => stmtTopicsHex.includes(u8aToHex(t)));
+      } else {
+        matches = filterTopics.some((t) => stmtTopicsHex.includes(u8aToHex(t)));
+      }
       if (matches) sub.send(statement as never);
     }
 
     return ok(undefined);
+  });
+
+  // ── Theme ────────────────────────────────────────────────────
+
+  container.handleThemeSubscribe((_, send) => {
+    send(currentTheme);
+    themeSubscribers.add(send);
+    return () => {
+      themeSubscribers.delete(send);
+    };
+  });
+
+  // ── Entropy derivation (RFC-0007) ───────────────────────────
+
+  container.handleDeriveEntropy((key, { ok, err }) => {
+    try {
+      // Use the first account's mini-secret as the root entropy source.
+      // Real hosts use BIP-39 entropy; for test purposes, derive from the
+      // account's raw seed (which is stable for dev accounts).
+      const rootPair = pairs[0]?.pair;
+      if (!rootPair) {
+        return err(new DeriveEntropyErr.Unknown({ reason: "No accounts available" }));
+      }
+      // Use the public key as a stable stand-in for root account secret
+      // (real hosts use BIP-39 entropy, but test dev accounts don't have it)
+      const entropy = deriveProductEntropy(rootPair.publicKey, "test-product", key);
+      return ok(entropy);
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      return err(new DeriveEntropyErr.Unknown({ reason }));
+    }
+  });
+
+  // ── Root account (RFC-0010) ─────────────────────────────────
+
+  container.handleAccountGetRoot((_, { ok, err }) => {
+    if (!isAuthenticated) {
+      return err(new RequestCredentialsErr.NotConnected());
+    }
+    if (pairs.length === 0) {
+      return err(new RequestCredentialsErr.NotConnected());
+    }
+    // Return the first account as the root account
+    const rootPair = pairs[0];
+    return ok({
+      publicKey: rootPair.pair.publicKey,
+      name: rootPair.name,
+    });
+  });
+
+  // ── Login (RFC-0009) ────────────────────────────────────────
+
+  container.handleRequestLogin((reason, { ok, err }) => {
+    if (isAuthenticated) {
+      return ok("alreadyConnected" as const);
+    }
+
+    let result: "success" | "rejected";
+    if (loginBehavior === "success") {
+      result = "success";
+    } else if (loginBehavior === "reject") {
+      result = "rejected";
+    } else {
+      result = loginBehavior(reason) ? "success" : "rejected";
+    }
+
+    if (result === "success") {
+      isAuthenticated = true;
+    }
+
+    return ok(result as never);
+  });
+
+  // ── Payments (RFC-0006) ─────────────────────────────────────
+
+  container.handlePaymentBalanceSubscribe((_, send) => {
+    send({ available: paymentBalance });
+    paymentBalanceSubscribers.add(send);
+    return () => {
+      paymentBalanceSubscribers.delete(send);
+    };
+  });
+
+  container.handlePaymentTopUp((params, { ok, err }) => {
+    paymentLog.push({
+      type: "top-up",
+      amount: params.amount,
+      source: params.source,
+      timestamp: Date.now(),
+    });
+    paymentBalance += params.amount;
+    // Notify balance subscribers
+    for (const sub of paymentBalanceSubscribers) {
+      sub({ available: paymentBalance });
+    }
+    return ok(undefined);
+  });
+
+  container.handlePaymentRequest((params, { ok, err }) => {
+    if (params.amount > paymentBalance) {
+      return err(new PaymentRequestErr.InsufficientBalance());
+    }
+
+    paymentCounter += 1;
+    const paymentId = `pay-${paymentCounter}`;
+    paymentBalance -= params.amount;
+
+    paymentLog.push({
+      type: "request",
+      amount: params.amount,
+      destination: params.destination,
+      paymentId,
+      timestamp: Date.now(),
+    });
+
+    // Notify balance subscribers
+    for (const sub of paymentBalanceSubscribers) {
+      sub({ available: paymentBalance });
+    }
+
+    // Auto-complete the payment
+    paymentStatuses.set(paymentId, { tag: "Completed" });
+
+    return ok({ id: paymentId });
+  });
+
+  container.handlePaymentStatusSubscribe((paymentId, send) => {
+    const status = paymentStatuses.get(paymentId);
+    if (status) {
+      send(status as never);
+    } else {
+      send({ tag: "Processing", value: undefined } as never);
+    }
+
+    let subs = paymentStatusSubscribers.get(paymentId);
+    if (!subs) {
+      subs = new Set();
+      paymentStatusSubscribers.set(paymentId, subs);
+    }
+    subs.add(send);
+
+    return () => {
+      const s = paymentStatusSubscribers.get(paymentId);
+      if (s) {
+        s.delete(send);
+        if (s.size === 0) paymentStatusSubscribers.delete(paymentId);
+      }
+    };
   });
 
   // ── Connection status ────────────────────────────────────────
@@ -933,9 +1226,15 @@ async function init(): Promise<void> {
       const stmt = statement as { topics?: Uint8Array[] };
       const stmtTopicsHex = (stmt.topics ?? []).map((t) => u8aToHex(t));
       for (const sub of statementSubscribers) {
-        const matches =
-          sub.topics.length === 0 ||
-          sub.topics.every((t) => stmtTopicsHex.includes(u8aToHex(t)));
+        const filterTopics = sub.filter.value;
+        let matches: boolean;
+        if (filterTopics.length === 0) {
+          matches = true;
+        } else if (sub.filter.tag === "MatchAll") {
+          matches = filterTopics.every((t) => stmtTopicsHex.includes(u8aToHex(t)));
+        } else {
+          matches = filterTopics.some((t) => stmtTopicsHex.includes(u8aToHex(t)));
+        }
         if (matches) sub.send(statement as never);
       }
     },
@@ -943,6 +1242,62 @@ async function init(): Promise<void> {
     clearStatements() {
       statementStore.length = 0;
       submittedStatements.length = 0;
+    },
+
+    // ── Theme control ──────────────────────────────────────────
+
+    getTheme() {
+      return currentTheme;
+    },
+
+    setTheme(theme: "light" | "dark") {
+      currentTheme = theme;
+      for (const sub of themeSubscribers) {
+        sub(theme);
+      }
+    },
+
+    // ── Login / auth control ───────────────────────────────────
+
+    setLoginBehavior(behavior: LoginBehavior) {
+      loginBehavior = behavior;
+    },
+
+    getIsAuthenticated() {
+      return isAuthenticated;
+    },
+
+    simulateDisconnect() {
+      isAuthenticated = false;
+    },
+
+    simulateReconnect() {
+      isAuthenticated = true;
+    },
+
+    // ── Payment control ────────────────────────────────────────
+
+    setPaymentBalance(amount: bigint) {
+      paymentBalance = amount;
+      for (const sub of paymentBalanceSubscribers) {
+        sub({ available: paymentBalance });
+      }
+    },
+
+    getPaymentLog() {
+      return [...paymentLog];
+    },
+
+    clearPaymentLog() {
+      paymentLog.length = 0;
+    },
+
+    simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }) {
+      paymentStatuses.set(paymentId, status);
+      const subs = paymentStatusSubscribers.get(paymentId);
+      if (subs) {
+        for (const sub of subs) sub(status as never);
+      }
     },
 
     dispose() {

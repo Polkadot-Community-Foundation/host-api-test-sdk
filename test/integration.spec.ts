@@ -233,7 +233,7 @@ test.describe('Root (non-product) accounts', () => {
 
 test.describe('Permission enforcement', () => {
 
-  test('signing fails without TransactionSubmit permission', async ({ page }) => {
+  test('signing fails without ChainSubmit permission', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -250,7 +250,7 @@ test.describe('Permission enforcement', () => {
     }
   });
 
-  test('signing succeeds after requesting TransactionSubmit permission', async ({ page }) => {
+  test('signing succeeds after requesting ChainSubmit permission', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -260,7 +260,7 @@ test.describe('Permission enforcement', () => {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
 
       // Request permission first
-      const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestTransactionSubmit());
+      const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestChainSubmit());
       expect(permResult.ok).toBe(true);
 
       // Now signing should work
@@ -271,7 +271,7 @@ test.describe('Permission enforcement', () => {
       // Verify permission was logged on host side
       const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
       expect(log.length).toBeGreaterThanOrEqual(1);
-      expect(log.some((e: any) => e.tag === 'TransactionSubmit' && e.approved)).toBe(true);
+      expect(log.some((e: any) => e.tag === 'ChainSubmit' && e.approved)).toBe(true);
     } finally {
       await host.close();
     }
@@ -307,7 +307,7 @@ test.describe('Permission enforcement', () => {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
 
       // Pre-grant without product requesting
-      await page.evaluate(() => window.__TEST_HOST__.grantPermission('TransactionSubmit'));
+      await page.evaluate(() => window.__TEST_HOST__.grantPermission('ChainSubmit'));
 
       const result = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
       expect(result.ok).toBe(true);
@@ -329,7 +329,7 @@ test.describe('Permission enforcement', () => {
       await page.evaluate(() => window.__TEST_HOST__.setPermissionBehavior('reject-all'));
 
       // Product requests permission — protocol round-trip succeeds but permission is denied
-      const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestTransactionSubmit());
+      const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestChainSubmit());
       expect(permResult.ok).toBe(true);
       expect(permResult.approved).toBe(false);
 
@@ -339,7 +339,7 @@ test.describe('Permission enforcement', () => {
 
       // Permission log shows rejection
       const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
-      expect(log.some((e: any) => e.tag === 'TransactionSubmit' && !e.approved)).toBe(true);
+      expect(log.some((e: any) => e.tag === 'ChainSubmit' && !e.approved)).toBe(true);
     } finally {
       await host.close();
     }
@@ -398,7 +398,7 @@ test.describe('Device permissions', () => {
     }
   });
 
-  test('ExternalRequest permission is tracked', async ({ page }) => {
+  test('Remote permission is tracked', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -408,12 +408,12 @@ test.describe('Device permissions', () => {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
 
       const result = await product.evaluate(() =>
-        window.__TEST_PRODUCT__.requestExternalRequest('https://example.com')
+        window.__TEST_PRODUCT__.requestRemote('https://example.com')
       );
       expect(result.ok).toBe(true);
 
       const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
-      expect(log.some((e: any) => e.tag === 'ExternalRequest' && e.approved)).toBe(true);
+      expect(log.some((e: any) => e.tag === 'Remote' && e.approved)).toBe(true);
     } finally {
       await host.close();
     }
@@ -1045,16 +1045,16 @@ test.describe('Container recreation resets logs', () => {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
 
       // Grant permission, verify it's set
-      await page.evaluate(() => window.__TEST_HOST__.grantPermission('TransactionSubmit'));
+      await page.evaluate(() => window.__TEST_HOST__.grantPermission('ChainSubmit'));
       const granted = await page.evaluate(() => window.__TEST_HOST__.getGrantedPermissions());
-      expect(granted).toContain('TransactionSubmit');
+      expect(granted).toContain('ChainSubmit');
 
       // Switch accounts — container recreates, grants should clear
       await page.evaluate(() => window.__TEST_HOST__.setAccounts(['bob']));
       await loadHostAndProduct(page, host.url, productServer.url); // wait for product to reconnect
 
       const grantedAfter = await page.evaluate(() => window.__TEST_HOST__.getGrantedPermissions());
-      expect(grantedAfter).not.toContain('TransactionSubmit');
+      expect(grantedAfter).not.toContain('ChainSubmit');
     } finally {
       await host.close();
     }

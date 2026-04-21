@@ -9,6 +9,8 @@ export type {
   DevAccountInfo,
   DevAccountName,
   HexString,
+  LoginBehavior,
+  PaymentLogEntry,
   SigningLogEntry,
 } from '../types.js';
 export {

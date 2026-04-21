@@ -1,7 +1,7 @@
 import type { Page, FrameLocator } from '@playwright/test';
 import { createTestHostServer } from '../server.js';
 import { DEFAULT_CHAIN } from '../chains.js';
-import type { ChatBot, ChatMessageLogEntry, ChatRoom, CreateTestHostOptions, DevAccountName, HexString, NavigationLogEntry, NotificationLogEntry, PermissionBehavior, PermissionLogEntry, PreimageEntry, SigningLogEntry, StatementSubmissionLogEntry, TestHostAPI } from '../types.js';
+import type { ChatBot, ChatMessageLogEntry, ChatRoom, CreateTestHostOptions, DevAccountName, HexString, LoginBehavior, NavigationLogEntry, NotificationLogEntry, PaymentLogEntry, PermissionBehavior, PermissionLogEntry, PreimageEntry, SigningLogEntry, StatementSubmissionLogEntry, TestHostAPI } from '../types.js';
 
 export interface TestHost {
   /** The host page (contains the iframe) */
@@ -87,6 +87,36 @@ export interface TestHost {
 
   /** Clear all statements */
   clearStatements(): Promise<void>;
+
+  /** Get the current theme */
+  getTheme(): Promise<'light' | 'dark'>;
+
+  /** Set the theme and notify subscribers */
+  setTheme(theme: 'light' | 'dark'): Promise<void>;
+
+  /** Set how the host responds to login requests */
+  setLoginBehavior(behavior: LoginBehavior): Promise<void>;
+
+  /** Whether the product is currently authenticated */
+  getIsAuthenticated(): Promise<boolean>;
+
+  /** Simulate user disconnect (unauthenticated state) */
+  simulateDisconnect(): Promise<void>;
+
+  /** Simulate user reconnect (authenticated state) */
+  simulateReconnect(): Promise<void>;
+
+  /** Set the mock payment balance */
+  setPaymentBalance(amount: bigint): Promise<void>;
+
+  /** Get the log of payment operations */
+  getPaymentLog(): Promise<PaymentLogEntry[]>;
+
+  /** Clear the payment log */
+  clearPaymentLog(): Promise<void>;
+
+  /** Manually set a payment's status and notify subscribers */
+  simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }): Promise<void>;
 
   /** Wait until the product-sdk has connected to the host container */
   waitForConnection(timeout?: number): Promise<void>;
@@ -233,6 +263,50 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
 
         async clearStatements() {
           await page.evaluate(() => window.__TEST_HOST__.clearStatements());
+        },
+
+        async getTheme() {
+          return page.evaluate(() => window.__TEST_HOST__.getTheme());
+        },
+
+        async setTheme(theme: 'light' | 'dark') {
+          await page.evaluate((t) => window.__TEST_HOST__.setTheme(t), theme);
+        },
+
+        async setLoginBehavior(behavior: LoginBehavior) {
+          await page.evaluate((b) => window.__TEST_HOST__.setLoginBehavior(b), behavior);
+        },
+
+        async getIsAuthenticated() {
+          return page.evaluate(() => window.__TEST_HOST__.getIsAuthenticated());
+        },
+
+        async simulateDisconnect() {
+          await page.evaluate(() => window.__TEST_HOST__.simulateDisconnect());
+        },
+
+        async simulateReconnect() {
+          await page.evaluate(() => window.__TEST_HOST__.simulateReconnect());
+        },
+
+        async setPaymentBalance(amount: bigint) {
+          // BigInt can't be serialized by Playwright evaluate, pass as string
+          await page.evaluate((a) => window.__TEST_HOST__.setPaymentBalance(BigInt(a)), amount.toString());
+        },
+
+        async getPaymentLog() {
+          return page.evaluate(() => window.__TEST_HOST__.getPaymentLog());
+        },
+
+        async clearPaymentLog() {
+          await page.evaluate(() => window.__TEST_HOST__.clearPaymentLog());
+        },
+
+        async simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }) {
+          await page.evaluate(
+            ([id, s]) => window.__TEST_HOST__.simulatePaymentStatus(id, s),
+            [paymentId, status] as const,
+          );
         },
 
         async waitForConnection(timeout = 30_000) {
