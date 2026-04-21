@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.7.0
+
+### Breaking changes
+
+- **Permission renames** — `TransactionSubmit` → `ChainSubmit`, `ExternalRequest` → `Remote`. Signing enforcement now checks `ChainSubmit`. `handlePermission` receives `RemotePermission[]` (batched) instead of a single permission.
+- **Signing uses `ProductAccountId`** — `handleSignPayload` and `handleSignRaw` receive `{ account: [dotnsId, derivationIndex], payload }` instead of `{ address, data }`.
+- **Legacy account rename** — `handleGetNonProductAccounts` → `handleGetLegacyAccounts`. New handlers: `handleSignPayloadWithLegacyAccount`, `handleSignRawWithLegacyAccount`, `handleCreateTransactionWithLegacyAccount`.
+- **Statement store subscribe** — takes `TopicFilter` (`{ tag: 'MatchAll' | 'MatchAny', value: Topic[] }`) instead of `Topic[]`. Delivers `SignedStatementsPage` (`{ statements, isComplete }`) instead of raw arrays.
+- **Device permissions expanded** — 9 variants: Camera, Microphone, Location, Bluetooth, Notifications, NFC, Clipboard, OpenUrl, Biometrics.
+- **polkadot-api v2** — `polkadot-api/ws-provider` import changed to `polkadot-api/ws`.
+
+### Migration from 0.6.x
+
+Permission names:
+```diff
+-await testHost.grantPermission('TransactionSubmit');
++await testHost.grantPermission('ChainSubmit');
+```
+
+Permission log assertions:
+```diff
+-expect(log.some(e => e.tag === 'TransactionSubmit')).toBe(true);
++expect(log.some(e => e.tag === 'ChainSubmit')).toBe(true);
+```
+
+### Added
+
+#### Theme (RFC-0007)
+- `handleThemeSubscribe` — products subscribe to host theme changes (`'light'` / `'dark'`).
+- `getTheme()` / `setTheme(theme)` — test controls.
+
+#### Entropy derivation (RFC-0007)
+- `handleDeriveEntropy` — deterministic 32-byte entropy from a caller key, using the three-layer BLAKE2b-256 scheme via `deriveProductEntropy` from `@novasamatech/host-container`.
+
+#### Root account access (RFC-0010)
+- `handleAccountGetRoot` — returns the first configured account as the root DotNS-linked account.
+
+#### Login flow (RFC-0009)
+- `handleRequestLogin` — products trigger the host login flow. Simulates auth state.
+- `setLoginBehavior(behavior)` — `'success'` / `'reject'` / custom function.
+- `getIsAuthenticated()` / `simulateDisconnect()` / `simulateReconnect()` — test controls.
+
+#### Payment API (RFC-0006)
+- `handlePaymentBalanceSubscribe`, `handlePaymentTopUp`, `handlePaymentRequest`, `handlePaymentStatusSubscribe` — in-memory payment state.
+- `setPaymentBalance(amount)` / `getPaymentLog()` / `clearPaymentLog()` / `simulatePaymentStatus(id, status)` — test controls.
+
+#### Types
+- **New exported types**: `LoginBehavior`, `PaymentLogEntry`
+
+### Changed
+
+- **Dependencies** — `@novasamatech/host-api`, `host-container`, `product-sdk` → 0.7.0; `polkadot-api` → ^2.0.0.
+- **Integration tests updated** — all 36 tests pass against the v0.7 protocol.
+
 ## 0.6.0
 
 ### Added

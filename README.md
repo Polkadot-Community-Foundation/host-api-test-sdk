@@ -148,14 +148,14 @@ test("handles permission rejection", async ({ testHost }) => {
   // Verify the request was made and rejected
   const log = await testHost.getPermissionLog();
   expect(log).toHaveLength(1);
-  expect(log[0].tag).toBe("ExternalRequest");
+  expect(log[0].tag).toBe("Remote");
   expect(log[0].approved).toBe(false);
 });
 
 test("selective permissions", async ({ testHost }) => {
-  // Custom logic: approve TransactionSubmit, reject ExternalRequest
+  // Custom logic: approve ChainSubmit, reject Remote
   await testHost.setPermissionBehavior(
-    (tag) => tag === "TransactionSubmit"
+    (tag) => tag === "ChainSubmit"
   );
 
   // ... test product behavior ...
