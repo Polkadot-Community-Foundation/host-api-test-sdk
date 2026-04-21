@@ -39,8 +39,8 @@ declare global {
     __TEST_PRODUCT__: {
       rootAddress: string | null;
       trySignRaw(): Promise<TestResult>;
-      requestTransactionSubmit(): Promise<TestResult>;
-      requestExternalRequest(url: string): Promise<TestResult>;
+      requestChainSubmit(): Promise<TestResult>;
+      requestRemote(url: string): Promise<TestResult>;
       requestDevicePermission(type: string): Promise<TestResult>;
       navigateTo(url: string): Promise<TestResult>;
       pushNotification(text: string, deeplink?: string): Promise<TestResult>;
@@ -87,9 +87,9 @@ async function init() {
       },
     );
 
-    // Fetch non-product (root) accounts
+    // Fetch legacy (root) accounts
     let firstRootAddress: string | null = null;
-    const rootResult = await accountsProvider.getNonProductAccounts();
+    const rootResult = await accountsProvider.getLegacyAccounts();
 
     rootResult.match(
       (accounts: Array<{ publicKey: Uint8Array; name: string | undefined }>) => {
@@ -106,11 +106,10 @@ async function init() {
       rootAddress: firstRootAddress,
 
       async trySignRaw(): Promise<TestResult> {
-        if (!firstRootAddress) return { ok: false, error: 'no address' };
         try {
-          const r = await hostApi.signRaw(enumValue('v1', {
-            address: firstRootAddress,
-            data: { tag: 'Bytes' as const, value: new TextEncoder().encode('test-payload') },
+          const r = await hostApi.signRawWithLegacyAccount(enumValue('v1', {
+            signer: firstRootAddress ?? '',
+            payload: { tag: 'Bytes' as const, value: new TextEncoder().encode('test-payload') },
           }));
           if (r.isOk()) {
             const val = r.value;
@@ -122,12 +121,11 @@ async function init() {
         }
       },
 
-      async requestTransactionSubmit(): Promise<TestResult> {
+      async requestChainSubmit(): Promise<TestResult> {
         try {
-          const r = await hostApi.permission(enumValue('v1', {
-            tag: 'TransactionSubmit' as const,
-            value: undefined,
-          }));
+          const r = await hostApi.permission(enumValue('v1', [
+            { tag: 'ChainSubmit' as const, value: undefined },
+          ]));
           if (r.isOk()) {
             return { ok: true, approved: r.value.value };
           }
@@ -137,12 +135,11 @@ async function init() {
         }
       },
 
-      async requestExternalRequest(url: string): Promise<TestResult> {
+      async requestRemote(url: string): Promise<TestResult> {
         try {
-          const r = await hostApi.permission(enumValue('v1', {
-            tag: 'ExternalRequest' as const,
-            value: url,
-          }));
+          const r = await hostApi.permission(enumValue('v1', [
+            { tag: 'Remote' as const, value: [url] },
+          ]));
           if (r.isOk()) {
             return { ok: true, approved: r.value.value };
           }
@@ -155,7 +152,7 @@ async function init() {
       async requestDevicePermission(type: string): Promise<TestResult> {
         try {
           const r = await hostApi.devicePermission(
-            enumValue('v1', type as 'Camera' | 'Microphone' | 'Bluetooth' | 'Location'),
+            enumValue('v1', type as 'Camera' | 'Microphone' | 'Bluetooth' | 'Location' | 'Notifications' | 'NFC' | 'Clipboard' | 'OpenUrl' | 'Biometrics'),
           );
           if (r.isOk()) {
             return { ok: true, approved: r.value.value };
@@ -334,14 +331,18 @@ async function init() {
 
       statementSubscribe(topicsHex: string[]) {
         const topics = topicsHex.map(h => hexToU8a(h));
+        // v0.7: TopicFilter enum — use MatchAll for backward compat
+        const filter = { tag: 'MatchAll' as const, value: topics };
         const sub = hostApi.statementStoreSubscribe(
-          enumValue('v1', topics),
+          enumValue('v1', filter),
           (payload: unknown) => {
-            // Unwrap version envelope, then spread the array of statements
-            // (receive codec is Vector(SignedStatement)).
+            // Unwrap version envelope → SignedStatementsPage { statements, isComplete }
             const p = payload as { tag?: string; value?: unknown };
             const unwrapped = p?.tag === 'v1' ? p.value : payload;
-            if (Array.isArray(unwrapped)) {
+            const page = unwrapped as { statements?: unknown[]; isComplete?: boolean };
+            if (page?.statements && Array.isArray(page.statements)) {
+              for (const s of page.statements) receivedStatements.push(s);
+            } else if (Array.isArray(unwrapped)) {
               for (const s of unwrapped) receivedStatements.push(s);
             } else {
               receivedStatements.push(unwrapped);

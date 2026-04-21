@@ -41,7 +41,7 @@ export type Account = DevAccountName | DevAccountInfo;
 export interface CreateTestHostOptions {
   /** URL of the product to embed (e.g. http://localhost:3001) */
   productUrl: string;
-  /** Accounts to provide (used for getNonProductAccounts and signing) */
+  /** Accounts to provide (used for getLegacyAccounts and signing) */
   accounts?: Account[];
   /** Chain config (default: PASEO_ASSET_HUB) */
   chain?: ChainConfig;
@@ -131,6 +131,15 @@ export interface StatementSubmissionLogEntry {
   timestamp: number;
 }
 
+export interface PaymentLogEntry {
+  type: 'top-up' | 'request';
+  amount: bigint;
+  source?: unknown;
+  destination?: unknown;
+  paymentId?: string;
+  timestamp: number;
+}
+
 /**
  * Controls how the test host responds to remote permission requests.
  * - `'approve-all'` — auto-approve every request (default)
@@ -138,6 +147,14 @@ export interface StatementSubmissionLogEntry {
  * - `(tag: string, value: unknown) => boolean` — custom per-request decision
  */
 export type PermissionBehavior = 'approve-all' | 'reject-all' | ((tag: string, value: unknown) => boolean);
+
+/**
+ * Controls how the test host responds to login requests (RFC-0009).
+ * - `'success'` — auto-approve login (default)
+ * - `'reject'` — auto-reject login
+ * - `(reason?: string) => boolean` — custom per-request decision
+ */
+export type LoginBehavior = 'success' | 'reject' | ((reason: string | undefined) => boolean);
 
 /** Shape of window.__TEST_HOST__ — shared between browser bundle and Playwright fixture. */
 export interface TestHostAPI {
@@ -157,7 +174,7 @@ export interface TestHostAPI {
   getGrantedPermissions(): string[];
   /**
    * Enable or disable permission enforcement on signing.
-   * When enabled (default), signing requires TransactionSubmit to have been
+   * When enabled (default), signing requires ChainSubmit to have been
    * granted — matching real host behavior. Disable for legacy tests that
    * don't exercise the permission flow.
    */
@@ -206,5 +223,32 @@ export interface TestHostAPI {
   injectStatement(statement: unknown): void;
   /** Clear the submitted-statements log and any seeded statements. */
   clearStatements(): void;
+
+  // ── Theme ──────────────────────────────────────────────────
+  /** Get the current theme. */
+  getTheme(): 'light' | 'dark';
+  /** Set the theme and notify subscribers. */
+  setTheme(theme: 'light' | 'dark'): void;
+
+  // ── Login / auth ───────────────────────────────────────────
+  /** Set how the host responds to login requests (RFC-0009). */
+  setLoginBehavior(behavior: LoginBehavior): void;
+  /** Whether the product is currently authenticated. */
+  getIsAuthenticated(): boolean;
+  /** Simulate user disconnect (unauthenticated state). */
+  simulateDisconnect(): void;
+  /** Simulate user reconnect (authenticated state). */
+  simulateReconnect(): void;
+
+  // ── Payments ───────────────────────────────────────────────
+  /** Set the mock payment balance (in smallest unit). */
+  setPaymentBalance(amount: bigint): void;
+  /** Get the log of payment operations (top-ups, requests). */
+  getPaymentLog(): PaymentLogEntry[];
+  /** Clear the payment log. */
+  clearPaymentLog(): void;
+  /** Manually set a payment's status and notify subscribers. */
+  simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }): void;
+
   dispose(): void;
 }
