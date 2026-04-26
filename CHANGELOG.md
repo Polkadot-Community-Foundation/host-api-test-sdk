@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1
+
+### Fixed
+
+- **Signing no longer gated behind `ChainSubmit` permission** — in v0.7.0 the test host incorrectly required `ChainSubmit` before signing. Real Spektr hosts don't do this — `ChainSubmit` is enforced by the container at the `transaction_broadcast` level, not at signing. Signing now works without any prior permission request, matching production behavior.
+
+### Changed
+
+- **CI runners** — switched to `parity-default`, added `corepack enable` for pnpm.
+
 ## 0.7.0
 
 ### Breaking changes

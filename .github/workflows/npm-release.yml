@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish:
-    runs-on: parity-ubuntu
+    runs-on: parity-default
     steps:
       - uses: actions/checkout@v4
 
