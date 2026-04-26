@@ -462,14 +462,6 @@ function setupContainer(
   // ── Sign payload (extrinsic) ─────────────────────────────────
 
   container.handleSignPayload((params, { ok, err }) => {
-    if (enforcePermissions && !grantedPermissions.has("ChainSubmit")) {
-      console.error(
-        "[test-host] Signing rejected: product did not request ChainSubmit permission. " +
-          "Call hostApi.permission([{ tag: 'ChainSubmit' }]) first.",
-      );
-      return err(new SigningErr.PermissionDenied());
-    }
-
     // params.account is [dotnsId, derivationIndex]
     const [dotnsId, idx] = params.account;
     const pair = getPairForProductAccount(config, pairs, dotnsId, idx);
@@ -514,13 +506,6 @@ function setupContainer(
   // ── Sign raw ─────────────────────────────────────────────────
 
   container.handleSignRaw((params, { ok, err }) => {
-    if (enforcePermissions && !grantedPermissions.has("ChainSubmit")) {
-      console.error(
-        "[test-host] Signing rejected: product did not request ChainSubmit permission.",
-      );
-      return err(new SigningErr.PermissionDenied());
-    }
-
     // params.account is [dotnsId, derivationIndex]
     const [dotnsId, idx] = params.account;
     const pair = getPairForProductAccount(config, pairs, dotnsId, idx);
@@ -551,10 +536,6 @@ function setupContainer(
   // ── Sign with legacy account (address-based) ───────────────
 
   container.handleSignPayloadWithLegacyAccount((params, { ok, err }) => {
-    if (enforcePermissions && !grantedPermissions.has("ChainSubmit")) {
-      return err(new SigningErr.PermissionDenied());
-    }
-
     const pair = getPairByAddress(params.signer);
     if (!pair) {
       return err(
@@ -589,10 +570,6 @@ function setupContainer(
   });
 
   container.handleSignRawWithLegacyAccount((params, { ok, err }) => {
-    if (enforcePermissions && !grantedPermissions.has("ChainSubmit")) {
-      return err(new SigningErr.PermissionDenied());
-    }
-
     const pair = getPairByAddress(params.signer);
     if (!pair) {
       return err(
