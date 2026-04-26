@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: parity-ubuntu
     steps:
       - uses: actions/checkout@v4
 
@@ -15,7 +15,8 @@ jobs:
         with:
           node-version: 22
 
-      - uses: pnpm/action-setup@v4
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -36,7 +37,7 @@ jobs:
         run: pnpm pack && ls -lh *.tgz
 
   integration-tests:
-    runs-on: ubuntu-latest
+    runs-on: parity-ubuntu
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +45,8 @@ jobs:
         with:
           node-version: 22
 
-      - uses: pnpm/action-setup@v4
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
