@@ -231,9 +231,9 @@ test.describe('Root (non-product) accounts', () => {
 
 // ── Permission enforcement ──────────────────────────────────────────
 
-test.describe('Permission enforcement', () => {
+test.describe('Permission handling', () => {
 
-  test('signing fails without ChainSubmit permission', async ({ page }) => {
+  test('signing works without explicit permission request', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -242,15 +242,17 @@ test.describe('Permission enforcement', () => {
     try {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
 
-      // Attempt signing without requesting permission first
+      // In v0.7, signing doesn't require ChainSubmit — that permission
+      // is enforced by the container at transaction_broadcast level.
       const result = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
-      expect(result.ok).toBe(false);
+      expect(result.ok).toBe(true);
+      expect(result.signature).toBeTruthy();
     } finally {
       await host.close();
     }
   });
 
-  test('signing succeeds after requesting ChainSubmit permission', async ({ page }) => {
+  test('ChainSubmit permission request is logged', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -259,25 +261,18 @@ test.describe('Permission enforcement', () => {
     try {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
 
-      // Request permission first
       const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestChainSubmit());
       expect(permResult.ok).toBe(true);
+      expect(permResult.approved).toBe(true);
 
-      // Now signing should work
-      const signResult = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
-      expect(signResult.ok).toBe(true);
-      expect(signResult.signature).toBeTruthy();
-
-      // Verify permission was logged on host side
       const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
-      expect(log.length).toBeGreaterThanOrEqual(1);
       expect(log.some((e: any) => e.tag === 'ChainSubmit' && e.approved)).toBe(true);
     } finally {
       await host.close();
     }
   });
 
-  test('signing succeeds when enforcement is disabled', async ({ page }) => {
+  test('permission is rejected when behavior is reject-all', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -286,58 +281,12 @@ test.describe('Permission enforcement', () => {
     try {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
 
-      // Disable enforcement
-      await page.evaluate(() => window.__TEST_HOST__.setEnforcePermissions(false));
-
-      // Signing works without permission request
-      const result = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
-      expect(result.ok).toBe(true);
-    } finally {
-      await host.close();
-    }
-  });
-
-  test('signing succeeds when permission is pre-granted via grantPermission', async ({ page }) => {
-    const host = await createTestHostServer({
-      productUrl: productServer.url,
-      accounts: ['alice'],
-    });
-
-    try {
-      const product = await loadHostAndProduct(page, host.url, productServer.url);
-
-      // Pre-grant without product requesting
-      await page.evaluate(() => window.__TEST_HOST__.grantPermission('ChainSubmit'));
-
-      const result = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
-      expect(result.ok).toBe(true);
-    } finally {
-      await host.close();
-    }
-  });
-
-  test('signing fails when permission is rejected', async ({ page }) => {
-    const host = await createTestHostServer({
-      productUrl: productServer.url,
-      accounts: ['alice'],
-    });
-
-    try {
-      const product = await loadHostAndProduct(page, host.url, productServer.url);
-
-      // Set reject-all behavior
       await page.evaluate(() => window.__TEST_HOST__.setPermissionBehavior('reject-all'));
 
-      // Product requests permission — protocol round-trip succeeds but permission is denied
       const permResult = await product.evaluate(() => window.__TEST_PRODUCT__.requestChainSubmit());
       expect(permResult.ok).toBe(true);
       expect(permResult.approved).toBe(false);
 
-      // Signing should still fail since permission was rejected
-      const signResult = await product.evaluate(() => window.__TEST_PRODUCT__.trySignRaw());
-      expect(signResult.ok).toBe(false);
-
-      // Permission log shows rejection
       const log = await page.evaluate(() => window.__TEST_HOST__.getPermissionLog());
       expect(log.some((e: any) => e.tag === 'ChainSubmit' && !e.approved)).toBe(true);
     } finally {
