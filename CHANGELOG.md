@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.2
+
+### Fixed
+
+- **Permission handler uses single `RemotePermission`** — upstream 0.7.2 refined the spec to use a single `RemotePermission` per request (not batched array). The test host now matches.
+
+### Changed
+
+- **Dependencies** — `@novasamatech/host-api`, `host-container`, `product-sdk` → ^0.7.2. Upstream changes include ABI-stable method ordering, notification permission gate, and restored deprecated JSON-RPC methods for backward compatibility.
+
 ## 0.7.1
 
 ### Fixed
