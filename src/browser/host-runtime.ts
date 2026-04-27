@@ -289,41 +289,34 @@ function setupContainer(
   });
 
   // ── Permissions ─────────────────────────────────────────────
-  // Matches real host behavior: product must request permission
-  // before gated operations (e.g. signing requires TransactionSubmit).
 
   container.handlePermission((params, { ok }) => {
-    // params is now RemotePermission[] (batched). Approve if all pass.
-    let allApproved = true;
-    for (const perm of params) {
-      let approved: boolean;
-      if (permissionBehavior === "approve-all") {
-        approved = true;
-      } else if (permissionBehavior === "reject-all") {
-        approved = false;
-      } else {
-        approved = permissionBehavior(perm.tag, perm.value);
-      }
-
-      if (approved) {
-        grantedPermissions.add(perm.tag);
-      } else {
-        allApproved = false;
-      }
-
-      permissionLog.push({
-        tag: perm.tag,
-        value: perm.value,
-        approved,
-        timestamp: Date.now(),
-      });
-
-      console.log(
-        `[test-host] Permission ${approved ? "granted" : "denied"}:`,
-        perm.tag,
-      );
+    // params is a single RemotePermission { tag, value }
+    let approved: boolean;
+    if (permissionBehavior === "approve-all") {
+      approved = true;
+    } else if (permissionBehavior === "reject-all") {
+      approved = false;
+    } else {
+      approved = permissionBehavior(params.tag, params.value);
     }
-    return ok(allApproved);
+
+    if (approved) {
+      grantedPermissions.add(params.tag);
+    }
+
+    permissionLog.push({
+      tag: params.tag,
+      value: params.value,
+      approved,
+      timestamp: Date.now(),
+    });
+
+    console.log(
+      `[test-host] Permission ${approved ? "granted" : "denied"}:`,
+      params.tag,
+    );
+    return ok(approved);
   });
 
   // ── Device permissions ─────────────────────────────────────────

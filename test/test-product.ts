@@ -123,9 +123,9 @@ async function init() {
 
       async requestChainSubmit(): Promise<TestResult> {
         try {
-          const r = await hostApi.permission(enumValue('v1', [
+          const r = await hostApi.permission(enumValue('v1',
             { tag: 'ChainSubmit' as const, value: undefined },
-          ]));
+          ));
           if (r.isOk()) {
             return { ok: true, approved: r.value.value };
           }
@@ -137,9 +137,9 @@ async function init() {
 
       async requestRemote(url: string): Promise<TestResult> {
         try {
-          const r = await hostApi.permission(enumValue('v1', [
+          const r = await hostApi.permission(enumValue('v1',
             { tag: 'Remote' as const, value: [url] },
-          ]));
+          ));
           if (r.isOk()) {
             return { ok: true, approved: r.value.value };
           }
