@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.3
+
+### Breaking changes
+
+- **`handleAccountGetRoot` replaced by `handleGetUserId`** — upstream 0.7.4 renamed this method (RFC-0014: Get User Primary DotNS Name). Returns `{ primaryUsername: string }` instead of `{ publicKey, name }`. Error type changed from `RequestCredentialsErr` to `GetUserIdErr`.
+
+### Changed
+
+- **Dependencies** — `@novasamatech/host-api`, `host-container`, `product-sdk` → ^0.7.4. Upstream changes include the `host_get_user_id` method (RFC-0014), sign method ABI ordering fix, and transport message parsing optimization.
+- **CI runners** — `parity-default` with `corepack enable`.
+
 ## 0.7.2
 
 ### Fixed
