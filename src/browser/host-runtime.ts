@@ -12,6 +12,7 @@
 import {
   ChatMessagePostingErr,
   DeriveEntropyErr,
+  GetUserIdErr,
   LoginErr,
   NavigateToErr,
   PaymentRequestErr,
@@ -895,20 +896,18 @@ function setupContainer(
     }
   });
 
-  // ── Root account (RFC-0010) ─────────────────────────────────
+  // ── User identity (RFC-0014, replaces RFC-0010 accountGetRoot) ──
 
-  container.handleAccountGetRoot((_, { ok, err }) => {
+  container.handleGetUserId((_, { ok, err }) => {
     if (!isAuthenticated) {
-      return err(new RequestCredentialsErr.NotConnected());
+      return err(new GetUserIdErr.NotConnected());
     }
     if (pairs.length === 0) {
-      return err(new RequestCredentialsErr.NotConnected());
+      return err(new GetUserIdErr.NotConnected());
     }
-    // Return the first account as the root account
-    const rootPair = pairs[0];
+    // Return first account name as primaryUsername
     return ok({
-      publicKey: rootPair.pair.publicKey,
-      name: rootPair.name,
+      primaryUsername: pairs[0].name ?? "alice",
     });
   });
 
