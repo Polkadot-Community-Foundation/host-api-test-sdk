@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.4
+
+### Added
+
+- **`handleRequestResourceAllocation`** (RFC-0010) — products can request resource allowances (StatementStoreAllowance, BulletInAllowance, SmartContractAllowance, AutoSigning). The test host auto-allocates all requested resources.
+- **`handleStatementStoreCreateProofAuthorized`** — creates statement proofs using the host-internal allowance account (no product account required). Uses the first configured account.
+
+### Changed
+
+- **Dependencies** — `@novasamatech/host-api`, `host-container`, `product-sdk` → ^0.7.7. Upstream changes include RFC-0010 resource allocation, authorized statement proofs, SSO signer fixes, and reconnect improvements.
+
 ## 0.7.3
 
 ### Breaking changes

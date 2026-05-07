@@ -839,6 +839,22 @@ function setupContainer(
     });
   });
 
+  // Authorized proof: uses the first account (host-internal allowance, no product account needed)
+  container.handleStatementStoreCreateProofAuthorized((statement, { ok }) => {
+    const pair = pairs[0]?.pair;
+    const dataToSign =
+      (statement as { data?: Uint8Array }).data ?? new Uint8Array();
+    const signature = pair ? pair.sign(dataToSign) : new Uint8Array(64);
+
+    return ok({
+      tag: "Sr25519",
+      value: {
+        signature,
+        signer: pair?.publicKey ?? new Uint8Array(32),
+      },
+    });
+  });
+
   container.handleStatementStoreSubmit((statement, { ok }) => {
     statementStore.push(statement);
     submittedStatements.push({
@@ -1009,6 +1025,17 @@ function setupContainer(
         if (s.size === 0) paymentStatusSubscribers.delete(paymentId);
       }
     };
+  });
+
+  // ── Resource allocation (RFC-0010) ───────────────────────────
+
+  container.handleRequestResourceAllocation((resources, { ok }) => {
+    // Auto-allocate all requested resources for test purposes
+    const outcomes = resources.map(() => ({
+      tag: "Allocated" as const,
+      value: undefined,
+    }));
+    return ok(outcomes);
   });
 
   // ── Connection status ────────────────────────────────────────

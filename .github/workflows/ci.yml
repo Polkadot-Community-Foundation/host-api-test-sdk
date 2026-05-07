@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: parity-default
+    runs-on: parity-int-ubuntu
     steps:
       - uses: actions/checkout@v4
 
@@ -37,7 +37,7 @@ jobs:
         run: pnpm pack && ls -lh *.tgz
 
   integration-tests:
-    runs-on: parity-default
+    runs-on: parity-int-ubuntu
     steps:
       - uses: actions/checkout@v4
 
