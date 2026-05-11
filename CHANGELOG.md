@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.5
+
+### Added
+
+- **`handleCreateTransaction`** — creates transactions for product accounts. Returns the call data for test assertions.
+- **`handleAccountCreateProof`** — creates Ring VRF proofs for product accounts. Signs the message with sr25519 for test purposes.
+- **Integration tests** — 12 new tests covering theme subscribe, entropy derivation, login/getUserId, resource allocation, feature check, local storage, statement store proof, create transaction, and account create proof. Total: 46 integration tests (up from 34).
+
+### Changed
+
+- **Dependencies** — `@novasamatech/host-api`, `host-container`, `product-sdk` → ^0.7.8 (identity fixes, bulletin package).
+
 ## 0.7.4
 
 ### Added

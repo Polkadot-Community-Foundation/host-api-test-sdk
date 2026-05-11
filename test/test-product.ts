@@ -48,22 +48,36 @@ declare global {
       chatCreateRoom(room: { roomId: string; name: string; icon: string }): Promise<TestResult & { status?: string }>;
       chatRegisterBot(bot: { botId: string; name: string; icon: string }): Promise<TestResult & { status?: string }>;
       chatPostTextMessage(roomId: string, text: string): Promise<TestResult & { messageId?: string }>;
-      /** Subscribes to chat actions and stores received actions in an array. Returns array reference for polling. */
       subscribeChatActions(): { unsubscribe(): void };
       getReceivedChatActions(): Array<unknown>;
       clearReceivedChatActions(): void;
       preimageSubmit(value: number[]): Promise<TestResult & { key?: string }>;
       preimageLookup(key: string): Promise<TestResult & { value?: number[] | null }>;
       statementSubmit(topicsHex: string[], dataHex: string): Promise<TestResult>;
+      statementCreateProof(dotnsId: string, index: number, dataHex: string): Promise<TestResult & { proof?: unknown }>;
       statementSubscribe(topicsHex: string[]): { unsubscribe(): void };
       getReceivedStatements(): Array<unknown>;
       clearReceivedStatements(): void;
+      // v0.7+ additions
+      subscribeTheme(): { unsubscribe(): void };
+      getReceivedThemes(): string[];
+      deriveEntropy(keyHex: string): Promise<TestResult & { entropyHex?: string }>;
+      requestLogin(reason?: string): Promise<TestResult & { loginResult?: string }>;
+      getUserId(): Promise<TestResult & { primaryUsername?: string }>;
+      requestResourceAllocation(resources: Array<{ tag: string; value?: unknown }>): Promise<TestResult & { outcomes?: Array<{ tag: string }> }>;
+      featureSupported(tag: string, value: unknown): Promise<TestResult & { supported?: boolean }>;
+      localStorageWrite(key: string, value: string): Promise<TestResult>;
+      localStorageRead(key: string): Promise<TestResult & { value?: string | null }>;
+      localStorageClear(key: string): Promise<TestResult>;
+      createTransaction(dotnsId: string, index: number): Promise<TestResult>;
+      accountCreateProof(dotnsId: string, index: number): Promise<TestResult & { proofHex?: string }>;
     };
   }
 }
 
 const receivedChatActions: unknown[] = [];
 const receivedStatements: unknown[] = [];
+const receivedThemes: string[] = [];
 
 async function init() {
   const el = document.getElementById('status')!;
@@ -358,6 +372,167 @@ async function init() {
 
       clearReceivedStatements() {
         receivedStatements.length = 0;
+      },
+
+      // ── Statement create proof ────────────────────────────────
+      async statementCreateProof(dotnsId: string, index: number, dataHex: string) {
+        try {
+          const data = hexToU8a(dataHex);
+          const statement = {
+            proof: undefined,
+            decryptionKey: undefined,
+            expiry: undefined,
+            channel: undefined,
+            topics: [],
+            data,
+          };
+          const r = await hostApi.statementStoreCreateProof(enumValue('v1', [[dotnsId, index], statement]));
+          if (r.isOk()) return { ok: true, proof: r.value.value };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Theme ─────────────────────────────────────────────────
+      subscribeTheme() {
+        const sub = hostApi.themeSubscribe(enumValue('v1', undefined), (payload: unknown) => {
+          const p = payload as { tag?: string; value?: unknown };
+          if (p?.tag === 'v1') receivedThemes.push(String(p.value));
+        });
+        return { unsubscribe() { sub.unsubscribe(); } };
+      },
+
+      getReceivedThemes() {
+        return [...receivedThemes];
+      },
+
+      // ── Entropy ───────────────────────────────────────────────
+      async deriveEntropy(keyHex: string) {
+        try {
+          const key = hexToU8a(keyHex);
+          const r = await hostApi.deriveEntropy(enumValue('v1', key));
+          if (r.isOk()) return { ok: true, entropyHex: u8aToHex(r.value.value) };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Login / getUserId ─────────────────────────────────────
+      async requestLogin(reason?: string) {
+        try {
+          const r = await hostApi.requestLogin(enumValue('v1', reason));
+          if (r.isOk()) return { ok: true, loginResult: String(r.value.value) };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async getUserId() {
+        try {
+          const r = await hostApi.getUserId(enumValue('v1', undefined));
+          if (r.isOk()) return { ok: true, primaryUsername: r.value.value.primaryUsername };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Resource allocation ───────────────────────────────────
+      async requestResourceAllocation(resources: Array<{ tag: string; value?: unknown }>) {
+        try {
+          const r = await hostApi.requestResourceAllocation(enumValue('v1', resources));
+          if (r.isOk()) {
+            const outcomes = (r.value.value as Array<{ tag: string }>).map(o => ({ tag: o.tag }));
+            return { ok: true, outcomes };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Feature check ─────────────────────────────────────────
+      async featureSupported(tag: string, value: unknown) {
+        try {
+          const r = await hostApi.featureSupported(enumValue('v1', { tag, value }));
+          if (r.isOk()) return { ok: true, supported: r.value.value };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Local storage ─────────────────────────────────────────
+      async localStorageWrite(key: string, value: string) {
+        try {
+          const r = await hostApi.localStorageWrite(enumValue('v1', [key, new TextEncoder().encode(value)]));
+          if (r.isOk()) return { ok: true };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async localStorageRead(key: string) {
+        try {
+          const r = await hostApi.localStorageRead(enumValue('v1', key));
+          if (r.isOk()) {
+            const bytes = r.value.value;
+            return { ok: true, value: bytes ? new TextDecoder().decode(bytes) : null };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async localStorageClear(key: string) {
+        try {
+          const r = await hostApi.localStorageClear(enumValue('v1', key));
+          if (r.isOk()) return { ok: true };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Create transaction ────────────────────────────────────
+      async createTransaction(dotnsId: string, index: number) {
+        try {
+          const payload = {
+            version: 1 as const,
+            signer: null,
+            callData: '0x0000' as `0x${string}`,
+            extensions: [] as Array<{ id: string; extra: `0x${string}`; additionalSigned: `0x${string}` }>,
+            txExtVersion: 0,
+            context: { metadata: '0x' as `0x${string}`, tokenSymbol: 'PAS', tokenDecimals: 10, bestBlockHeight: 0 },
+          };
+          const r = await hostApi.createTransaction(enumValue('v1', [[dotnsId, index], payload]));
+          if (r.isOk()) return { ok: true };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Account create proof ──────────────────────────────────
+      async accountCreateProof(dotnsId: string, index: number) {
+        try {
+          const message = new TextEncoder().encode('test-proof');
+          const location = {
+            genesisHash: '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
+            ringRootHash: '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
+            hints: undefined,
+          };
+          const r = await hostApi.accountCreateProof(enumValue('v1', [[dotnsId, index], location, message]));
+          if (r.isOk()) return { ok: true, proofHex: u8aToHex(r.value.value) };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
       },
     };
   } catch (err) {
