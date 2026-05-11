@@ -453,6 +453,23 @@ function setupContainer(
     return ok({ context, alias });
   });
 
+  // Ring VRF proof: real hosts use an actual ring VRF; for test purposes,
+  // sign the message with the product account's sr25519 key.
+  container.handleAccountCreateProof((params, { ok }) => {
+    const [[dotnsId, idx], _ringLocation, message] = params;
+    const pair = getPairForProductAccount(config, pairs, dotnsId, idx);
+    const signature = pair ? pair.sign(message) : new Uint8Array(64);
+    return ok(signature);
+  });
+
+  // ── Create transaction (product account) ────────────────────
+
+  container.handleCreateTransaction((params, { ok }) => {
+    const [[_dotnsId, _idx], payload] = params;
+    // For test purposes, return the callData as-is
+    return ok(payload.callData);
+  });
+
   // ── Sign payload (extrinsic) ─────────────────────────────────
 
   container.handleSignPayload((params, { ok, err }) => {

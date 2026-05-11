@@ -22,7 +22,7 @@ When bumping `@novasamatech/*` dependencies:
 ## Testing
 
 - `pnpm test` — export smoke tests (22 tests)
-- `pnpm test:integration` — Playwright E2E tests (34+ tests) that exercise the full host-container ↔ product-sdk protocol
+- `pnpm test:integration` — Playwright E2E tests (46+ tests) that exercise the full host-container ↔ product-sdk protocol
 - Always run both after any change
 - If the test product (`test/test-product.ts`) uses APIs that changed, update it and rebuild via `node test/build-test-product.mjs`
 

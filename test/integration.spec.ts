@@ -1009,3 +1009,318 @@ test.describe('Container recreation resets logs', () => {
     }
   });
 });
+
+// ── Theme ──────────────────────────────────────────────────────────
+
+test.describe('Theme', () => {
+
+  test('theme subscribe delivers current theme', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      await product.evaluate(() => {
+        (window as any).__themeSub = window.__TEST_PRODUCT__.subscribeTheme();
+      });
+      await page.waitForTimeout(100);
+
+      const themes = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedThemes());
+      expect(themes.length).toBeGreaterThanOrEqual(1);
+      expect(themes[0]).toBe('light');
+
+      // Host changes theme
+      await page.evaluate(() => window.__TEST_HOST__.setTheme('dark'));
+      await page.waitForTimeout(100);
+
+      const updated = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedThemes());
+      expect(updated).toContain('dark');
+
+      await product.evaluate(() => (window as any).__themeSub.unsubscribe());
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Entropy ────────────────────────────────────────────────────────
+
+test.describe('Entropy', () => {
+
+  test('deriveEntropy returns 32-byte deterministic result', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const keyHex = '0x' + '01'.repeat(16); // 16-byte key
+      const a = await product.evaluate((k: string) =>
+        window.__TEST_PRODUCT__.deriveEntropy(k), keyHex);
+      expect(a.ok).toBe(true);
+      expect(a.entropyHex).toMatch(/^0x[0-9a-f]{64}$/); // 32 bytes
+
+      // Same key → same result (deterministic)
+      const b = await product.evaluate((k: string) =>
+        window.__TEST_PRODUCT__.deriveEntropy(k), keyHex);
+      expect(b.entropyHex).toBe(a.entropyHex);
+
+      // Different key → different result
+      const c = await product.evaluate((k: string) =>
+        window.__TEST_PRODUCT__.deriveEntropy(k), '0x' + '02'.repeat(16));
+      expect(c.ok).toBe(true);
+      expect(c.entropyHex).not.toBe(a.entropyHex);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Login / getUserId ──────────────────────────────────────────────
+
+test.describe('Login and user identity', () => {
+
+  test('requestLogin returns success when authenticated', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.requestLogin('test'));
+      expect(result.ok).toBe(true);
+      expect(result.loginResult).toBe('alreadyConnected');
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('requestLogin returns rejected when login behavior is reject', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      await page.evaluate(() => window.__TEST_HOST__.simulateDisconnect());
+      await page.evaluate(() => window.__TEST_HOST__.setLoginBehavior('reject'));
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.requestLogin('please'));
+      expect(result.ok).toBe(true);
+      expect(result.loginResult).toBe('rejected');
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('getUserId returns primaryUsername', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.getUserId());
+      expect(result.ok).toBe(true);
+      expect(result.primaryUsername).toBe('Alice');
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Resource allocation ────────────────────────────────────────────
+
+test.describe('Resource allocation', () => {
+
+  test('all resources are allocated', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.requestResourceAllocation([
+          { tag: 'StatementStoreAllowance', value: undefined },
+          { tag: 'BulletInAllowance', value: undefined },
+          { tag: 'SmartContractAllowance', value: 0 },
+          { tag: 'AutoSigning', value: undefined },
+        ]));
+      expect(result.ok).toBe(true);
+      expect(result.outcomes).toHaveLength(4);
+      expect(result.outcomes!.every(o => o.tag === 'Allocated')).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Feature check ──────────────────────────────────────────────────
+
+test.describe('Feature check', () => {
+
+  test('chain feature returns true for configured genesis', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Default chain is PASEO_ASSET_HUB
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.featureSupported('Chain',
+          '0xd6eec26135305a8ad257a20d003357284c8aa03d0bdb2b357ab0a22371e11ef2'));
+      expect(result.ok).toBe(true);
+      expect(result.supported).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('chain feature returns false for unknown genesis', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.featureSupported('Chain', '0x' + '00'.repeat(32)));
+      expect(result.ok).toBe(true);
+      expect(result.supported).toBe(false);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Local storage ──────────────────────────────────────────────────
+
+test.describe('Local storage', () => {
+
+  test('write, read, and clear', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Write
+      const w = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.localStorageWrite('test-key', 'hello'));
+      expect(w.ok).toBe(true);
+
+      // Read back
+      const r = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.localStorageRead('test-key'));
+      expect(r.ok).toBe(true);
+      expect(r.value).toBe('hello');
+
+      // Clear
+      const c = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.localStorageClear('test-key'));
+      expect(c.ok).toBe(true);
+
+      // Read again — should be null
+      const r2 = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.localStorageRead('test-key'));
+      expect(r2.ok).toBe(true);
+      expect(r2.value).toBeNull();
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Statement store proof ──────────────────────────────────────────
+
+test.describe('Statement store proof', () => {
+
+  test('createProof returns a valid proof', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+      productAccounts: { 'test-product.dot/0': 'alice' },
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.statementCreateProof('test-product.dot', 0, '0xdeadbeef'));
+      expect(result.ok).toBe(true);
+      expect(result.proof).toBeTruthy();
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Create transaction ─────────────────────────────────────────────
+
+test.describe('Create transaction', () => {
+
+  test('createTransaction returns successfully', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.createTransaction('test-product.dot', 0));
+      expect(result.ok).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Account create proof ───────────────────────────────────────────
+
+test.describe('Account create proof', () => {
+
+  test('accountCreateProof returns proof bytes', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.accountCreateProof('test-product.dot', 0));
+      expect(result.ok).toBe(true);
+      expect(result.proofHex).toMatch(/^0x[0-9a-f]+$/);
+      expect(result.proofHex!.length).toBeGreaterThan(10);
+    } finally {
+      await host.close();
+    }
+  });
+});
