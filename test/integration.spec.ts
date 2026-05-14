@@ -14,8 +14,8 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { u8aToHex } from '@polkadot/util';
+import { cryptoWaitReady, sr25519Verify } from '@polkadot/util-crypto';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { createTestHostServer } from '../dist/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1283,7 +1283,7 @@ test.describe('Statement store proof', () => {
 
 test.describe('Create transaction', () => {
 
-  test('createTransaction returns successfully', async ({ page }) => {
+  test('createTransaction returns a valid v4 signed extrinsic', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -1295,6 +1295,23 @@ test.describe('Create transaction', () => {
       const result = await product.evaluate(() =>
         window.__TEST_PRODUCT__.createTransaction('test-product.dot', 0));
       expect(result.ok).toBe(true);
+      expect(result.signedHex).toBeDefined();
+
+      // test-product sends callData = [0, 0], no extensions
+      // expected layout: [0x84][0x00 + 32B pubkey][0x01 + 64B sig][0 extras][2B callData]
+      const bytes = hexToU8a(result.signedHex!);
+      expect(bytes.length).toBe(1 + 1 + 32 + 1 + 64 + 2);
+      expect(bytes[0]).toBe(0x84);   // v4 + signed bit
+      expect(bytes[1]).toBe(0x00);   // MultiAddress::Id
+      expect(bytes[34]).toBe(0x01);  // MultiSignature::Sr25519
+
+      const pubkey = bytes.slice(2, 34);
+      const signature = bytes.slice(35, 99);
+      const callData = bytes.slice(99, 101);
+      expect(Array.from(callData)).toEqual([0, 0]);
+
+      // signing payload = callData || extras || additionalSigned; here just callData
+      expect(sr25519Verify(callData, signature, pubkey)).toBe(true);
     } finally {
       await host.close();
     }

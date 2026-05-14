@@ -72,7 +72,7 @@ export interface CreateTestHostOptions {
 }
 
 export interface SigningLogEntry {
-  type: 'payload' | 'raw';
+  type: 'payload' | 'raw' | 'createTransaction';
   payload: unknown;
   timestamp: number;
 }

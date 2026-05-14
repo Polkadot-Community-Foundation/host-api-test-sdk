@@ -349,17 +349,25 @@ _Thanks to [@TarikGul](https://github.com/TarikGul) for spotting and fixing this
 
 ---
 
-# host-api-test-sdk 0.8.0
+# host-api-test-sdk 0.8.1
 
-## Upstream bump to `0.7.9-4` (breaking)
+This release bumps the test host to the `0.7.9-4` upstream protocol and ships the matching `handleCreateTransaction` rework. It's two changes, but they land together — the upstream bump on its own is unusable, since `host_create_transaction` was redesigned and now needs to return a real signed extrinsic instead of echoing call data back.
 
-`@novasamatech/host-api`, `host-container`, and `product-sdk` are pinned to `0.7.9-4`. (Exact pin, not `^` — caret on a prerelease floats through subsequent prereleases like `0.7.9-5`.)
+## Upstream bump to `@novasamatech/*@0.7.9-4`
+
+`host-api`, `host-container`, and `product-sdk` are pinned to `0.7.9-4` (exact pin, not `^` — caret on a prerelease floats through subsequent prereleases like `0.7.9-5`).
 
 Upstream did not publish a `CHANGELOG.md` entry for any `0.7.9-N`. The notes below are reconstructed from the commit log.
 
-## `handleCreateTransaction` shape changed
+### Notable non-handler changes
 
-The biggest break: `host_create_transaction` was redesigned. The request is now a flat object — no more outer tuple, no more inner versioned envelope around the payload, no more `context` block, and `genesisHash` is required at the top level.
+- **Attestation service removed**, SSO auth flow simplified on the paired-Polkadot-Mobile side. No test-SDK API change, but if you assert on SSO message shapes in product tests, expect different traffic.
+- **Backward-compat flag** added in the product-sdk accounts provider.
+- **Internal rename**: `@novasamatech/product-sdk` is being renamed to `@novasamatech/host-api-wrapper`. `0.7.9-4` still publishes under `product-sdk`; `0.7.9-5` (and beyond) only under `host-api-wrapper`. We stay on `product-sdk@0.7.9-4` for this release.
+
+## `handleCreateTransaction` — new request shape
+
+`host_create_transaction` was redesigned upstream. The request is now a flat object — no more outer tuple, no more inner versioned envelope around the payload, no more `context` block, and `genesisHash` is required at the top level.
 
 ```ts
 // 0.7.6 — old
@@ -367,7 +375,7 @@ container.handleCreateTransaction(([[dotnsId, idx], payload], { ok }) => {
   return ok(payload.callData);
 });
 
-// 0.8.0 — new
+// 0.8.1 — new
 container.handleCreateTransaction((params, { ok }) => {
   // params: {
   //   signer: [dotnsId, idx],           // ProductAccountId tuple
@@ -376,7 +384,7 @@ container.handleCreateTransaction((params, { ok }) => {
   //   extensions: { id, extra: Uint8Array, additionalSigned: Uint8Array }[],
   //   txExtVersion: number,
   // }
-  return ok(params.callData);
+  // … see signing section below for what this handler actually returns now
 });
 ```
 
@@ -384,10 +392,37 @@ container.handleCreateTransaction((params, { ok }) => {
 
 If your product code constructs `createTransaction` requests by hand, update the call site to send a flat `ProductAccountTransaction` and include `genesisHash`. The exports `VersionedPublicTxPayload` / `TxPayloadV1Public` are gone — use `ProductAccountTransaction` and `LegacyTransaction`.
 
-## Other upstream changes worth knowing
+## `handleCreateTransaction` — return value is now a real signed extrinsic
 
-- **Attestation service removed**, SSO auth flow simplified on the paired-Polkadot-Mobile side. No test-SDK API change, but if you assert on SSO message shapes in product tests, expect different traffic.
-- **Backward-compat flag** added in the product-sdk accounts provider.
-- **Internal rename**: `@novasamatech/product-sdk` is being renamed to `@novasamatech/host-api-wrapper`. `0.7.9-4` still publishes under `product-sdk`; `0.7.9-5` (and beyond) only under `host-api-wrapper`. We stay on `product-sdk@0.7.9-4` for this release.
+The matching half of the rework: the test host now actually signs and frames the extrinsic. In `0.7.x` and the unreleased shape-only draft, it returned `payload.callData` straight through — fine for tests that only checked `result.ok === true`, but as soon as a product tried to **submit** the returned bytes (e.g. via polkadot-api's `signer.signTx(...)` against paseo-asset-hub-next), the extrinsic codec rejected them, since the first byte was the pallet index of the call, not a valid v4/v5 extrinsic prefix.
+
+No product-side code change is required — the wrapper API hasn't moved. What changes is the byte content of the response.
+
+What the handler does now:
+
+1. Resolves the keypair from `params.signer`:
+   - Product flow: `[dotNsId, derivationIndex]` → derived child of the host's configured root account (or the `productAccounts` override map).
+   - Legacy flow: raw 32-byte sr25519 public key → matched against `accounts[i].publicKey` exposed via `getLegacyAccounts`.
+2. Concatenates `extra` and `additionalSigned` from each entry in `params.extensions`, in order.
+3. Signs `callData || extras || additionalSigned` with sr25519. Payloads longer than 256 bytes are blake2_256-hashed first, matching what `SignedPayload::using_encoded` does in `polkadot-sdk`.
+4. Returns the v4 signed-extrinsic body (no outer compact length prefix):
+
+   ```
+   [0x84]                              v4 + signed bit
+   [0x00 + AccountId32 (32 bytes)]     MultiAddress::Id
+   [0x01 + signature (64 bytes)]       MultiSignature::Sr25519
+   [extras concat]                     each extension's `extra`, in order
+   [callData]
+   ```
+
+### Chain-version scope
+
+`extrinsic.version` on paseo-asset-hub-next is `[4]` — there is no v5 in that runtime. The pallet-revive / EVM-flavored extensions (`AsPgas`, `AsRingAlias`, `EthSetOrigin`, etc.) ride as additional signed extensions on a regular v4 extrinsic. So `0.8.1` ships v4-signed only.
+
+If your target runtime negotiates v5 general extrinsics, this handler will still build a v4 frame and the chain will reject it. File an issue with the runtime + `txExtVersion` value and we'll add v5 in a follow-up.
+
+### A note on testing assumptions
+
+If your test relied on `params.callData` being echoed back verbatim, that assumption is gone — assert on the decoded extrinsic instead. polkadot-api's extrinsic codec is the easiest path.
 
 ---
