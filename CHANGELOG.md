@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.6
+
+### Fixed
+
+- **`PASEO_ASSET_HUB`** — `genesisHash` and `rpcUrl` updated to Paseo Asset Hub v2. The previous values pointed at Paseo Next v1, deprecated 2026-05-20.
+- **`PREVIEWNET`** and **`PREVIEWNET_ASSET_HUB`** — `genesisHash` refreshed against live RPC. The previous values were stale from prior redeployments and no longer matched what the chains return.
+
+All three values verified live via `chain_getBlockHash[0]`. The downstream `paritytech/product-sdk` e2e suite went from 9 failures (`chain-client-demo`, `contracts-demo`, `tx-demo`) to all green after the bump.
+
 ## 0.7.5
 
 ### Added
