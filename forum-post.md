@@ -351,78 +351,21 @@ _Thanks to [@TarikGul](https://github.com/TarikGul) for spotting and fixing this
 
 # host-api-test-sdk 0.8.1
 
-This release bumps the test host to the `0.7.9-4` upstream protocol and ships the matching `handleCreateTransaction` rework. It's two changes, but they land together — the upstream bump on its own is unusable, since `host_create_transaction` was redesigned and now needs to return a real signed extrinsic instead of echoing call data back.
+Bumps `@novasamatech/*` to `0.7.9-4` and fixes `handleCreateTransaction` to return a real signed v4 extrinsic. In `0.8.0` it echoed `params.callData` back — fine for `result.ok === true` checks, broken the moment a product tried to submit the bytes.
 
-## Upstream bump to `@novasamatech/*@0.7.9-4`
+## What changed
 
-`host-api`, `host-container`, and `product-sdk` are pinned to `0.7.9-4` (exact pin, not `^` — caret on a prerelease floats through subsequent prereleases like `0.7.9-5`).
+- **`handleCreateTransaction` / `handleCreateTransactionWithLegacyAccount`** — the request is now a flat object (`signer`, `genesisHash`, `callData`, `extensions`, `txExtVersion`); no more tuple wrapping, no `context` block, all fields are `Uint8Array`. Exports `VersionedPublicTxPayload` / `TxPayloadV1Public` are gone — use `ProductAccountTransaction` / `LegacyTransaction`.
+- The handler now signs `callData || extras || additionalSigned` sr25519 and returns a v4 signed-extrinsic frame: `[0x84][MultiAddress::Id + AccountId32][Sr25519 + sig][extras][callData]`. v5 is not emitted yet (paseo-asset-hub-next runs `extrinsic.version: [4]` only).
+- Upstream also removed the attestation service and simplified SSO; `@novasamatech/product-sdk` is being renamed to `@novasamatech/host-api-wrapper` (`0.7.9-5+` is under the new name; we stay on `product-sdk@0.7.9-4` for this release).
 
-Upstream did not publish a `CHANGELOG.md` entry for any `0.7.9-N`. The notes below are reconstructed from the commit log.
+## What you need to do
 
-### Notable non-handler changes
+- Upgrade to `0.8.1`. No product-side code change required — the wrapper API didn't move.
+- If you constructed `createTransaction` requests by hand, switch to the flat `ProductAccountTransaction` shape and include `genesisHash`.
+- If your tests asserted on the bytes being equal to `callData`, drop that assumption and decode the response as a v4 extrinsic instead.
+- If your runtime negotiates v5 general extrinsics, file an issue — v5 support is a follow-up.
 
-- **Attestation service removed**, SSO auth flow simplified on the paired-Polkadot-Mobile side. No test-SDK API change, but if you assert on SSO message shapes in product tests, expect different traffic.
-- **Backward-compat flag** added in the product-sdk accounts provider.
-- **Internal rename**: `@novasamatech/product-sdk` is being renamed to `@novasamatech/host-api-wrapper`. `0.7.9-4` still publishes under `product-sdk`; `0.7.9-5` (and beyond) only under `host-api-wrapper`. We stay on `product-sdk@0.7.9-4` for this release.
-
-## `handleCreateTransaction` — new request shape
-
-`host_create_transaction` was redesigned upstream. The request is now a flat object — no more outer tuple, no more inner versioned envelope around the payload, no more `context` block, and `genesisHash` is required at the top level.
-
-```ts
-// 0.7.6 — old
-container.handleCreateTransaction(([[dotnsId, idx], payload], { ok }) => {
-  return ok(payload.callData);
-});
-
-// 0.8.1 — new
-container.handleCreateTransaction((params, { ok }) => {
-  // params: {
-  //   signer: [dotnsId, idx],           // ProductAccountId tuple
-  //   genesisHash: Uint8Array,           // NEW, required
-  //   callData: Uint8Array,              // was HexString
-  //   extensions: { id, extra: Uint8Array, additionalSigned: Uint8Array }[],
-  //   txExtVersion: number,
-  // }
-  // … see signing section below for what this handler actually returns now
-});
-```
-
-`handleCreateTransactionWithLegacyAccount` got the same flattening; its `signer` is now `Uint8Array` (raw AccountId) instead of an SS58 string.
-
-If your product code constructs `createTransaction` requests by hand, update the call site to send a flat `ProductAccountTransaction` and include `genesisHash`. The exports `VersionedPublicTxPayload` / `TxPayloadV1Public` are gone — use `ProductAccountTransaction` and `LegacyTransaction`.
-
-## `handleCreateTransaction` — return value is now a real signed extrinsic
-
-The matching half of the rework: the test host now actually signs and frames the extrinsic. In `0.7.x` and the unreleased shape-only draft, it returned `payload.callData` straight through — fine for tests that only checked `result.ok === true`, but as soon as a product tried to **submit** the returned bytes (e.g. via polkadot-api's `signer.signTx(...)` against paseo-asset-hub-next), the extrinsic codec rejected them, since the first byte was the pallet index of the call, not a valid v4/v5 extrinsic prefix.
-
-No product-side code change is required — the wrapper API hasn't moved. What changes is the byte content of the response.
-
-What the handler does now:
-
-1. Resolves the keypair from `params.signer`:
-   - Product flow: `[dotNsId, derivationIndex]` → derived child of the host's configured root account (or the `productAccounts` override map).
-   - Legacy flow: raw 32-byte sr25519 public key → matched against `accounts[i].publicKey` exposed via `getLegacyAccounts`.
-2. Concatenates `extra` and `additionalSigned` from each entry in `params.extensions`, in order.
-3. Signs `callData || extras || additionalSigned` with sr25519. Payloads longer than 256 bytes are blake2_256-hashed first, matching what `SignedPayload::using_encoded` does in `polkadot-sdk`.
-4. Returns the v4 signed-extrinsic body (no outer compact length prefix):
-
-   ```
-   [0x84]                              v4 + signed bit
-   [0x00 + AccountId32 (32 bytes)]     MultiAddress::Id
-   [0x01 + signature (64 bytes)]       MultiSignature::Sr25519
-   [extras concat]                     each extension's `extra`, in order
-   [callData]
-   ```
-
-### Chain-version scope
-
-`extrinsic.version` on paseo-asset-hub-next is `[4]` — there is no v5 in that runtime. The pallet-revive / EVM-flavored extensions (`AsPgas`, `AsRingAlias`, `EthSetOrigin`, etc.) ride as additional signed extensions on a regular v4 extrinsic. So `0.8.1` ships v4-signed only.
-
-If your target runtime negotiates v5 general extrinsics, this handler will still build a v4 frame and the chain will reject it. File an issue with the runtime + `txExtVersion` value and we'll add v5 in a follow-up.
-
-### A note on testing assumptions
-
-If your test relied on `params.callData` being echoed back verbatim, that assumption is gone — assert on the decoded extrinsic instead. polkadot-api's extrinsic codec is the easiest path.
+`0.8.0` is deprecated on npm; upgrade.
 
 ---
