@@ -1188,7 +1188,7 @@ test.describe('Feature check', () => {
       // Default chain is PASEO_ASSET_HUB
       const result = await product.evaluate(() =>
         window.__TEST_PRODUCT__.featureSupported('Chain',
-          '0xd6eec26135305a8ad257a20d003357284c8aa03d0bdb2b357ab0a22371e11ef2'));
+          '0x173cea9df45656cf612c8b8ece56e04e9a693c69cfaac47d3628dae735067af8'));
       expect(result.ok).toBe(true);
       expect(result.supported).toBe(true);
     } finally {
