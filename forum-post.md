@@ -349,45 +349,23 @@ _Thanks to [@TarikGul](https://github.com/TarikGul) for spotting and fixing this
 
 ---
 
-# host-api-test-sdk 0.8.0
+# host-api-test-sdk 0.8.1
 
-## Upstream bump to `0.7.9-4` (breaking)
+Bumps `@novasamatech/*` to `0.7.9-4` and fixes `handleCreateTransaction` to return a real signed v4 extrinsic. In `0.8.0` it echoed `params.callData` back — fine for `result.ok === true` checks, broken the moment a product tried to submit the bytes.
 
-`@novasamatech/host-api`, `host-container`, and `product-sdk` are pinned to `0.7.9-4`. (Exact pin, not `^` — caret on a prerelease floats through subsequent prereleases like `0.7.9-5`.)
+## What changed
 
-Upstream did not publish a `CHANGELOG.md` entry for any `0.7.9-N`. The notes below are reconstructed from the commit log.
+- **`handleCreateTransaction` / `handleCreateTransactionWithLegacyAccount`** — the request is now a flat object (`signer`, `genesisHash`, `callData`, `extensions`, `txExtVersion`); no more tuple wrapping, no `context` block, all fields are `Uint8Array`. Exports `VersionedPublicTxPayload` / `TxPayloadV1Public` are gone — use `ProductAccountTransaction` / `LegacyTransaction`.
+- The handler now signs `callData || extras || additionalSigned` sr25519 and returns a v4 signed-extrinsic frame: `[0x84][MultiAddress::Id + AccountId32][Sr25519 + sig][extras][callData]`. v5 is not emitted yet (paseo-asset-hub-next runs `extrinsic.version: [4]` only).
+- Upstream also removed the attestation service and simplified SSO; `@novasamatech/product-sdk` is being renamed to `@novasamatech/host-api-wrapper` (`0.7.9-5+` is under the new name; we stay on `product-sdk@0.7.9-4` for this release).
 
-## `handleCreateTransaction` shape changed
+## What you need to do
 
-The biggest break: `host_create_transaction` was redesigned. The request is now a flat object — no more outer tuple, no more inner versioned envelope around the payload, no more `context` block, and `genesisHash` is required at the top level.
+- Upgrade to `0.8.1`. No product-side code change required — the wrapper API didn't move.
+- If you constructed `createTransaction` requests by hand, switch to the flat `ProductAccountTransaction` shape and include `genesisHash`.
+- If your tests asserted on the bytes being equal to `callData`, drop that assumption and decode the response as a v4 extrinsic instead.
+- If your runtime negotiates v5 general extrinsics, file an issue — v5 support is a follow-up.
 
-```ts
-// 0.7.6 — old
-container.handleCreateTransaction(([[dotnsId, idx], payload], { ok }) => {
-  return ok(payload.callData);
-});
-
-// 0.8.0 — new
-container.handleCreateTransaction((params, { ok }) => {
-  // params: {
-  //   signer: [dotnsId, idx],           // ProductAccountId tuple
-  //   genesisHash: Uint8Array,           // NEW, required
-  //   callData: Uint8Array,              // was HexString
-  //   extensions: { id, extra: Uint8Array, additionalSigned: Uint8Array }[],
-  //   txExtVersion: number,
-  // }
-  return ok(params.callData);
-});
-```
-
-`handleCreateTransactionWithLegacyAccount` got the same flattening; its `signer` is now `Uint8Array` (raw AccountId) instead of an SS58 string.
-
-If your product code constructs `createTransaction` requests by hand, update the call site to send a flat `ProductAccountTransaction` and include `genesisHash`. The exports `VersionedPublicTxPayload` / `TxPayloadV1Public` are gone — use `ProductAccountTransaction` and `LegacyTransaction`.
-
-## Other upstream changes worth knowing
-
-- **Attestation service removed**, SSO auth flow simplified on the paired-Polkadot-Mobile side. No test-SDK API change, but if you assert on SSO message shapes in product tests, expect different traffic.
-- **Backward-compat flag** added in the product-sdk accounts provider.
-- **Internal rename**: `@novasamatech/product-sdk` is being renamed to `@novasamatech/host-api-wrapper`. `0.7.9-4` still publishes under `product-sdk`; `0.7.9-5` (and beyond) only under `host-api-wrapper`. We stay on `product-sdk@0.7.9-4` for this release.
+`0.8.0` is deprecated on npm; upgrade.
 
 ---

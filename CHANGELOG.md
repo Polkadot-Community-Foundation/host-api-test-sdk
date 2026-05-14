@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.1
+
+### Fixed
+
+- **`handleCreateTransaction` and `handleCreateTransactionWithLegacyAccount` now return a properly signed v4 extrinsic.** In `0.8.0` they returned `params.callData` as-is — fine for tests that only assert `result.ok === true`, but unusable for tests that submit the bytes to a chain (polkadot-api's extrinsic codec rejects them, since `callData[0]` is the pallet index, not a valid v4/v5 prefix byte).
+
+  The handler now:
+  1. Resolves the keypair (product account flow → `getPairForProductAccount`; legacy flow → new `getPairByPublicKey` matching against the raw 32-byte sr25519 public key in `params.signer`).
+  2. Concatenates the per-extension `extra` and `additionalSigned` blobs in order.
+  3. Signs `callData || extras || additionalSigned` with sr25519 — using `blake2_256(payload)` instead when the payload exceeds 256 bytes, matching Substrate convention.
+  4. Returns the v4 signed-extrinsic body (no outer compact length): `[0x84][MultiAddress::Id + AccountId32][MultiSignature::Sr25519 + sig][extras][callData]`.
+
+  v5 general extrinsics aren't emitted yet — paseo-asset-hub-next currently advertises `extrinsic.version: [4]` only, and the `AsPgas` / `AsRingAlias` / `EthSetOrigin` / etc. extensions ride as additional signed-extensions on v4. v5 support is a follow-up if/when a runtime negotiates it.
+
+### Notes
+
+- `0.8.0` is deprecated on npm; consumers should upgrade. The protocol-shape changes from `0.8.0` are still in effect — only the handler return value changed.
+
 ## 0.8.0
 
 ### Breaking changes

@@ -11,6 +11,7 @@
 
 import {
   ChatMessagePostingErr,
+  CreateTransactionErr,
   DeriveEntropyErr,
   GetUserIdErr,
   LoginErr,
@@ -157,6 +158,64 @@ function getPair(uri: string): KeyringPair {
     urisByPair.set(pair, uri);
   }
   return pair;
+}
+
+function getPairByPublicKey(pubkey: Uint8Array): KeyringPair | undefined {
+  const target = u8aToHex(pubkey).toLowerCase();
+  for (const pair of pairsByUri.values()) {
+    if (u8aToHex(pair.publicKey).toLowerCase() === target) return pair;
+  }
+  return undefined;
+}
+
+/**
+ * Build a v4 signed extrinsic from a SCALE-encoded call plus per-extension
+ * `extra` / `additionalSigned` blobs, signed sr25519 by `pair`.
+ *
+ * Layout (no outer compact length prefix):
+ *   [0x84]                          version 4 + signed bit
+ *   [0x00][AccountId32]             MultiAddress::Id
+ *   [0x01][signature 64B]           MultiSignature::Sr25519
+ *   [extras concat]                 each extension's `extra` in order
+ *   [callData]
+ *
+ * Signing payload is `callData || extras || additionalSigned`; if longer than
+ * 256 bytes, sign blake2_256(payload) per Substrate convention.
+ */
+function buildSignedV4Extrinsic(
+  pair: KeyringPair,
+  callData: Uint8Array,
+  extensions: ReadonlyArray<{ extra: Uint8Array; additionalSigned: Uint8Array }>,
+): Uint8Array {
+  let extrasLen = 0;
+  let addlLen = 0;
+  for (const e of extensions) {
+    extrasLen += e.extra.length;
+    addlLen += e.additionalSigned.length;
+  }
+  const extras = new Uint8Array(extrasLen);
+  const addls = new Uint8Array(addlLen);
+  let o = 0;
+  for (const e of extensions) { extras.set(e.extra, o); o += e.extra.length; }
+  o = 0;
+  for (const e of extensions) { addls.set(e.additionalSigned, o); o += e.additionalSigned.length; }
+
+  const payload = new Uint8Array(callData.length + extras.length + addls.length);
+  payload.set(callData, 0);
+  payload.set(extras, callData.length);
+  payload.set(addls, callData.length + extras.length);
+
+  const toSign = payload.length > 256 ? blake2AsU8a(payload, 256) : payload;
+  const signature = pair.sign(toSign); // sr25519, 64 bytes
+
+  const out = new Uint8Array(1 + 1 + 32 + 1 + 64 + extras.length + callData.length);
+  let p = 0;
+  out[p++] = 0x84;
+  out[p++] = 0x00; out.set(pair.publicKey, p); p += 32;
+  out[p++] = 0x01; out.set(signature, p); p += 64;
+  out.set(extras, p); p += extras.length;
+  out.set(callData, p);
+  return out;
 }
 
 function getPairByAddress(address: string): KeyringPair | undefined {
@@ -464,10 +523,18 @@ function setupContainer(
 
   // ── Create transaction (product account) ────────────────────
 
-  container.handleCreateTransaction((params, { ok }) => {
-    // Upstream 0.7.9-x: flat ProductAccountTransaction
-    // { signer: [dotnsId, idx], genesisHash, callData, extensions, txExtVersion }
-    return ok(params.callData);
+  container.handleCreateTransaction((params, { ok, err }) => {
+    const [dotnsId, idx] = params.signer;
+    const pair = getPairForProductAccount(config, pairs, dotnsId, idx);
+    if (!pair) {
+      return err(
+        new CreateTransactionErr.Unknown({
+          reason: `No keypair for product account: ${dotnsId}/${idx}`,
+        }),
+      );
+    }
+    signingLog.push({ type: "createTransaction", payload: params, timestamp: Date.now() });
+    return ok(buildSignedV4Extrinsic(pair, params.callData, params.extensions));
   });
 
   // ── Sign payload (extrinsic) ─────────────────────────────────
@@ -608,10 +675,17 @@ function setupContainer(
 
   // ── Create transaction with legacy account ──────────────────
 
-  container.handleCreateTransactionWithLegacyAccount((params, { ok }) => {
-    // Upstream 0.7.9-x: flat LegacyTransaction
-    // { signer: Uint8Array, genesisHash, callData, extensions, txExtVersion }
-    return ok(params.callData);
+  container.handleCreateTransactionWithLegacyAccount((params, { ok, err }) => {
+    const pair = getPairByPublicKey(params.signer);
+    if (!pair) {
+      return err(
+        new CreateTransactionErr.Unknown({
+          reason: `No keypair matching legacy signer pubkey ${u8aToHex(params.signer)}`,
+        }),
+      );
+    }
+    signingLog.push({ type: "createTransaction", payload: params, timestamp: Date.now() });
+    return ok(buildSignedV4Extrinsic(pair, params.callData, params.extensions));
   });
 
   // ── Local storage (scoped per test) ──────────────────────────

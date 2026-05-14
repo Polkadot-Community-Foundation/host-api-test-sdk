@@ -19,6 +19,7 @@ interface TestResult {
   ok: boolean;
   approved?: boolean;
   signature?: string;
+  signedHex?: string;
   error?: string;
 }
 
@@ -510,7 +511,10 @@ async function init() {
             txExtVersion: 0,
           };
           const r = await hostApi.createTransaction(enumValue('v1', payload));
-          if (r.isOk()) return { ok: true };
+          if (r.isOk()) {
+            const inner = (r.value as { tag: string; value: Uint8Array }).value;
+            return { ok: true, signedHex: u8aToHex(inner) };
+          }
           return { ok: false, error: extractError(r.error) };
         } catch (err) {
           return { ok: false, error: extractError(err) };
