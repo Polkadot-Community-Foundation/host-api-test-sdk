@@ -349,23 +349,23 @@ _Thanks to [@TarikGul](https://github.com/TarikGul) for spotting and fixing this
 
 ---
 
-# host-api-test-sdk 0.8.1
+# host-api-test-sdk 0.8.2
 
-Bumps `@novasamatech/*` to `0.7.9-4` and fixes `handleCreateTransaction` to return a real signed v4 extrinsic. In `0.8.0` it echoed `params.callData` back — fine for `result.ok === true` checks, broken the moment a product tried to submit the bytes.
+Bumps `@novasamatech/*` to `0.7.9-4` and fixes `handleCreateTransaction` to return a real signed v4 extrinsic on the wire. Earlier `0.8.x` releases either echoed `callData` back or returned the inner extrinsic frame without its SCALE-compact length prefix — both of which fail the moment a product tries to submit the bytes through polkadot-api / RPC.
 
 ## What changed
 
 - **`handleCreateTransaction` / `handleCreateTransactionWithLegacyAccount`** — the request is now a flat object (`signer`, `genesisHash`, `callData`, `extensions`, `txExtVersion`); no more tuple wrapping, no `context` block, all fields are `Uint8Array`. Exports `VersionedPublicTxPayload` / `TxPayloadV1Public` are gone — use `ProductAccountTransaction` / `LegacyTransaction`.
-- The handler now signs `callData || extras || additionalSigned` sr25519 and returns a v4 signed-extrinsic frame: `[0x84][MultiAddress::Id + AccountId32][Sr25519 + sig][extras][callData]`. v5 is not emitted yet (paseo-asset-hub-next runs `extrinsic.version: [4]` only).
+- The handler signs `callData || extras || additionalSigned` with sr25519 and returns the full v4 wire form: `[compact len][0x84][MultiAddress::Id + AccountId32][Sr25519 + sig][extras][callData]`. v5 is not emitted yet (paseo-asset-hub-next runs `extrinsic.version: [4]` only).
 - Upstream also removed the attestation service and simplified SSO; `@novasamatech/product-sdk` is being renamed to `@novasamatech/host-api-wrapper` (`0.7.9-5+` is under the new name; we stay on `product-sdk@0.7.9-4` for this release).
 
 ## What you need to do
 
-- Upgrade to `0.8.1`. No product-side code change required — the wrapper API didn't move.
+- Upgrade to `0.8.2`. No product-side code change required — the wrapper API didn't move.
 - If you constructed `createTransaction` requests by hand, switch to the flat `ProductAccountTransaction` shape and include `genesisHash`.
 - If your tests asserted on the bytes being equal to `callData`, drop that assumption and decode the response as a v4 extrinsic instead.
 - If your runtime negotiates v5 general extrinsics, file an issue — v5 support is a follow-up.
 
-`0.8.0` is deprecated on npm; upgrade.
+`0.8.0` and `0.8.1` are superseded; skip straight to `0.8.2`.
 
 ---

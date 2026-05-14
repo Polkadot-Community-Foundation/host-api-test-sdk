@@ -31,7 +31,7 @@ import {
 import { Keyring } from "@polkadot/keyring";
 import type { KeyringPair } from "@polkadot/keyring/types";
 import { TypeRegistry } from "@polkadot/types";
-import { u8aToHex } from "@polkadot/util";
+import { compactToU8a, u8aToHex } from "@polkadot/util";
 import { blake2AsHex, blake2AsU8a, cryptoWaitReady } from "@polkadot/util-crypto";
 import { ResultAsync } from "neverthrow";
 import { getWsProvider } from "polkadot-api/ws";
@@ -172,7 +172,9 @@ function getPairByPublicKey(pubkey: Uint8Array): KeyringPair | undefined {
  * Build a v4 signed extrinsic from a SCALE-encoded call plus per-extension
  * `extra` / `additionalSigned` blobs, signed sr25519 by `pair`.
  *
- * Layout (no outer compact length prefix):
+ * Layout (with outer SCALE-compact length prefix — what RPC and polkadot-api
+ * decoders expect on the wire):
+ *   [compact len]                   length of the bytes that follow
  *   [0x84]                          version 4 + signed bit
  *   [0x00][AccountId32]             MultiAddress::Id
  *   [0x01][signature 64B]           MultiSignature::Sr25519
@@ -208,13 +210,18 @@ function buildSignedV4Extrinsic(
   const toSign = payload.length > 256 ? blake2AsU8a(payload, 256) : payload;
   const signature = pair.sign(toSign); // sr25519, 64 bytes
 
-  const out = new Uint8Array(1 + 1 + 32 + 1 + 64 + extras.length + callData.length);
+  const inner = new Uint8Array(1 + 1 + 32 + 1 + 64 + extras.length + callData.length);
   let p = 0;
-  out[p++] = 0x84;
-  out[p++] = 0x00; out.set(pair.publicKey, p); p += 32;
-  out[p++] = 0x01; out.set(signature, p); p += 64;
-  out.set(extras, p); p += extras.length;
-  out.set(callData, p);
+  inner[p++] = 0x84;
+  inner[p++] = 0x00; inner.set(pair.publicKey, p); p += 32;
+  inner[p++] = 0x01; inner.set(signature, p); p += 64;
+  inner.set(extras, p); p += extras.length;
+  inner.set(callData, p);
+
+  const lenPrefix = compactToU8a(inner.length);
+  const out = new Uint8Array(lenPrefix.length + inner.length);
+  out.set(lenPrefix, 0);
+  out.set(inner, lenPrefix.length);
   return out;
 }
 

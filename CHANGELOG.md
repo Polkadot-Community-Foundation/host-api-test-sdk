@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.2
+
+### Fixed
+
+- **`handleCreateTransaction` now prepends the SCALE-compact length prefix** to the returned bytes. `0.8.1` returned the bare `[0x84][signer][sig][extras][callData]` frame, which is the *inner* extrinsic body — RPC and polkadot-api decoders expect the outer wire form `[compact len][0x84]…`, so a length-prefixed decoder reads byte 0 as part of the length and fails. The handler now produces the wire form directly.
+- Integration test #45 was updated to strip the compact prefix before asserting on the v4 frame, so the test would have caught the missing prefix.
+
 ## 0.8.1
 
 ### Fixed
