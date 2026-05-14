@@ -503,14 +503,13 @@ async function init() {
       async createTransaction(dotnsId: string, index: number) {
         try {
           const payload = {
-            version: 1 as const,
-            signer: null,
-            callData: '0x0000' as `0x${string}`,
-            extensions: [] as Array<{ id: string; extra: `0x${string}`; additionalSigned: `0x${string}` }>,
+            signer: [dotnsId, index] as [string, number],
+            genesisHash: new Uint8Array(32),
+            callData: new Uint8Array([0, 0]),
+            extensions: [] as Array<{ id: string; extra: Uint8Array; additionalSigned: Uint8Array }>,
             txExtVersion: 0,
-            context: { metadata: '0x' as `0x${string}`, tokenSymbol: 'PAS', tokenDecimals: 10, bestBlockHeight: 0 },
           };
-          const r = await hostApi.createTransaction(enumValue('v1', [[dotnsId, index], payload]));
+          const r = await hostApi.createTransaction(enumValue('v1', payload));
           if (r.isOk()) return { ok: true };
           return { ok: false, error: extractError(r.error) };
         } catch (err) {

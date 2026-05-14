@@ -465,9 +465,9 @@ function setupContainer(
   // ── Create transaction (product account) ────────────────────
 
   container.handleCreateTransaction((params, { ok }) => {
-    const [[_dotnsId, _idx], payload] = params;
-    // For test purposes, return the callData as-is
-    return ok(payload.callData);
+    // Upstream 0.7.9-x: flat ProductAccountTransaction
+    // { signer: [dotnsId, idx], genesisHash, callData, extensions, txExtVersion }
+    return ok(params.callData);
   });
 
   // ── Sign payload (extrinsic) ─────────────────────────────────
@@ -608,8 +608,9 @@ function setupContainer(
 
   // ── Create transaction with legacy account ──────────────────
 
-  container.handleCreateTransactionWithLegacyAccount((params, { ok, err }) => {
-    // For test purposes, just return the call data as-is
+  container.handleCreateTransactionWithLegacyAccount((params, { ok }) => {
+    // Upstream 0.7.9-x: flat LegacyTransaction
+    // { signer: Uint8Array, genesisHash, callData, extensions, txExtVersion }
     return ok(params.callData);
   });
 

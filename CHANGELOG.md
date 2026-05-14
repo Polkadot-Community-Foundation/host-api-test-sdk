@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.8.0
+
+### Breaking changes
+
+- **`handleCreateTransaction` request shape** — upstream `0.7.9-x` rewrote `host_create_transaction`. The request is now a flat `ProductAccountTransaction` object instead of a `[ProductAccountId, VersionedPublicTxPayload]` tuple, with no versioned envelope around the inner payload:
+
+  ```ts
+  // 0.7.6 (old)
+  container.handleCreateTransaction(([[dotnsId, idx], payload], { ok }) => ok(payload.callData));
+
+  // 0.8.0 (new)
+  container.handleCreateTransaction((params, { ok }) => ok(params.callData));
+  // params: { signer: [dotnsId, idx], genesisHash: Uint8Array, callData: Uint8Array,
+  //          extensions: { id, extra: Uint8Array, additionalSigned: Uint8Array }[], txExtVersion }
+  ```
+
+  The `context` field (`metadata`, `tokenSymbol`, `tokenDecimals`, `bestBlockHeight`) is gone — `genesisHash` replaces it as the only top-level chain hint. All hex fields are now `Uint8Array`.
+
+- **`handleCreateTransactionWithLegacyAccount` request shape** — same flattening. `params.signer` is now `Uint8Array` (a 32-byte AccountId) instead of an SS58 string.
+
+- **Removed exports** — upstream removed `VersionedPublicTxPayload` / `TxPayloadV1Public`. New types: `LegacyTransaction`, `ProductAccountTransaction`.
+
+### Changed
+
+- **Dependencies** — `@novasamatech/host-api`, `host-container`, `product-sdk` → `0.7.9-4` (pinned, not caret, because `^0.7.9-4` would float through subsequent prereleases). Upstream did not publish a `CHANGELOG.md` entry for any `0.7.9-N`; this entry was reconstructed from the commit log.
+
+### Other upstream changes (no SDK-facing impact)
+
+- `feat: Remove attestation service and simplify auth flow` — SSO auth simplification on the paired-app side.
+- `fix: backward-compatibility flag in product-sdk accounts provider`.
+- `Rename product-sdk to host-api-wrapper (#169)` — internal package rename. `@novasamatech/product-sdk@0.7.9-4` still ships under the old name; `0.7.9-5` is the last prerelease and switches to `@novasamatech/host-api-wrapper`.
+
 ## 0.7.6
 
 ### Fixed
