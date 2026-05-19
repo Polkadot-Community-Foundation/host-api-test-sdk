@@ -90,8 +90,14 @@ export interface NavigationLogEntry {
 }
 
 export interface NotificationLogEntry {
+  /** Host-assigned id for this notification (incrementing u32). Used by `cancel`. */
+  id: number;
   text: string;
   deeplink: string | undefined;
+  /** Upstream 0.7.9: future delivery time in epoch-ms, or undefined for immediate. */
+  scheduledAt: bigint | undefined;
+  /** Set true once the product calls pushNotificationCancel with this id. */
+  cancelled: boolean;
   timestamp: number;
 }
 

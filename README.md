@@ -8,7 +8,7 @@ Lightweight test host for E2E testing embedded Polkadot dapps that use the Spekt
 
 ## Why
 
-Products built with `@novasamatech/product-sdk` run inside an iframe and communicate with the host via `postMessage`. The SDK injects `window.injectedWeb3.spektr` only when it detects a real parent frame running `@novasamatech/host-container`.
+Products built with `@novasamatech/host-api-wrapper` (formerly `@novasamatech/product-sdk`) run inside an iframe and communicate with the host via `postMessage`. The SDK injects `window.injectedWeb3.spektr` only when it detects a real parent frame running `@novasamatech/host-container`.
 
 To E2E test a product today you'd need the full triangle-web-host running — Next.js, React, wallet UI, DotNS, Service Workers. That's heavy and unnecessary for product tests.
 
@@ -185,7 +185,7 @@ Playwright test
   → registers handlers: accounts, signing, chain RPC, localStorage
 
 Product (in iframe)
-  → product-sdk detects iframe parent
+  → host-api-wrapper detects iframe parent
   → injects window.injectedWeb3.spektr
   → gets accounts (Alice/Bob with real sr25519 public keys)
   → signing requests → host auto-signs with dev keypair → returns signature
@@ -207,7 +207,7 @@ The browser bundle (~780KB minified) includes `@novasamatech/host-container`, `@
 | `testHost.setPermissionBehavior(behavior)` | Set permission response: `'approve-all'`, `'reject-all'`, or `(tag, value) => boolean` |
 | `testHost.getPermissionLog()` | All permission requests and outcomes since last clear |
 | `testHost.clearPermissionLog()` | Reset the permission log |
-| `testHost.waitForConnection(timeout?)` | Wait for product-sdk to connect |
+| `testHost.waitForConnection(timeout?)` | Wait for host-api-wrapper to connect |
 
 ### Dev accounts
 
@@ -235,7 +235,7 @@ createTestHostFixture({
 });
 ```
 
-> **Product accounts**: In production, `product-sdk` derives a unique keypair per product via `getProductAccount(dotnsId, index)`. By default the test host does the same derivation. Use `productAccounts` to map specific identities to funded dev accounts:
+> **Product accounts**: In production, `host-api-wrapper` derives a unique keypair per product via `getProductAccount(dotnsId, index)`. By default the test host does the same derivation. Use `productAccounts` to map specific identities to funded dev accounts:
 >
 > ```ts
 > createTestHostFixture({

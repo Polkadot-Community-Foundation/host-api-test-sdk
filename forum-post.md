@@ -349,23 +349,93 @@ _Thanks to [@TarikGul](https://github.com/TarikGul) for spotting and fixing this
 
 ---
 
-# host-api-test-sdk 0.8.2
+# host-api-test-sdk 0.8.3
 
-Bumps `@novasamatech/*` to `0.7.9-4` and fixes `handleCreateTransaction` to return a real signed v4 extrinsic on the wire. Earlier `0.8.x` releases either echoed `callData` back or returned the inner extrinsic frame without its SCALE-compact length prefix — both of which fail the moment a product tries to submit the bytes through polkadot-api / RPC.
+Single rollup for everything that landed in the `0.8` line. `0.8.0`–`0.8.2` were never posted; `0.8.3` is the version to upgrade to and the rest of this section explains everything that's changed since `0.7.6`.
 
-## What changed
+## TL;DR
 
-- **`handleCreateTransaction` / `handleCreateTransactionWithLegacyAccount`** — the request is now a flat object (`signer`, `genesisHash`, `callData`, `extensions`, `txExtVersion`); no more tuple wrapping, no `context` block, all fields are `Uint8Array`. Exports `VersionedPublicTxPayload` / `TxPayloadV1Public` are gone — use `ProductAccountTransaction` / `LegacyTransaction`.
-- The handler signs `callData || extras || additionalSigned` with sr25519 and returns the full v4 wire form: `[compact len][0x84][MultiAddress::Id + AccountId32][Sr25519 + sig][extras][callData]`. v5 is not emitted yet (paseo-asset-hub-next runs `extrinsic.version: [4]` only).
-- Upstream also removed the attestation service and simplified SSO; `@novasamatech/product-sdk` is being renamed to `@novasamatech/host-api-wrapper` (`0.7.9-5+` is under the new name; we stay on `product-sdk@0.7.9-4` for this release).
+- Upstream `@novasamatech/*` bumped to `^0.7.9` (final).
+- `@novasamatech/product-sdk` renamed to `@novasamatech/host-api-wrapper`. No compat re-export.
+- `handleCreateTransaction` request shape was redesigned and the handler now returns a real signed v4 extrinsic on the wire (not echoed `callData`).
+- Push notifications gained scheduling + cancellation.
+
+## Breaking changes since `0.7.6`
+
+### 1. Upstream package rename: `product-sdk` → `host-api-wrapper`
+
+`@novasamatech/product-sdk` is gone. Use `@novasamatech/host-api-wrapper`. There is no compat re-export under the old name. Update both your `package.json` and your source imports — usually a one-line dep change plus a find-replace.
+
+### 2. `handleCreateTransaction` request shape
+
+`host_create_transaction` was redesigned upstream. The request is now a flat object — no more outer tuple, no more inner versioned envelope around the payload, no `context` block, and `genesisHash` is required at the top level.
+
+```ts
+// 0.7.6 — old
+container.handleCreateTransaction(([[dotnsId, idx], payload], { ok }) => {
+  return ok(payload.callData);
+});
+
+// 0.8.3 — new
+container.handleCreateTransaction((params, { ok }) => {
+  // params: {
+  //   signer: [dotnsId, idx],           // ProductAccountId tuple
+  //   genesisHash: Uint8Array,           // required
+  //   callData: Uint8Array,              // was HexString
+  //   extensions: { id, extra: Uint8Array, additionalSigned: Uint8Array }[],
+  //   txExtVersion: number,
+  // }
+  return ok(buildSignedV4Extrinsic(...));
+});
+```
+
+`handleCreateTransactionWithLegacyAccount` got the same flattening; its `signer` is now `Uint8Array` (raw AccountId) instead of an SS58 string. Exports `VersionedPublicTxPayload` / `TxPayloadV1Public` are gone — use `ProductAccountTransaction` / `LegacyTransaction`.
+
+### 3. `handleCreateTransaction` return value is now a real signed extrinsic
+
+In `0.7.x` the handler returned `callData` straight through. That worked for tests that only checked `result.ok === true`, but as soon as a product tried to **submit** the returned bytes — for instance via polkadot-api's `signer.signTx(...)` against paseo-asset-hub-next — the extrinsic codec rejected them.
+
+`0.8.3` signs and frames the extrinsic. No product-side code change required — the wrapper API didn't move. What changes is the byte content of the response.
+
+What the handler does now:
+
+1. Resolves the keypair from `params.signer`:
+   - Product flow: `[dotNsId, derivationIndex]` → derived child of the host's configured root account (or the `productAccounts` override map).
+   - Legacy flow: raw 32-byte sr25519 public key → matched against `accounts[i].publicKey`.
+2. Concatenates `extra` and `additionalSigned` from each entry in `params.extensions`, in order.
+3. Signs `callData || extras || additionalSigned` with sr25519. Payloads longer than 256 bytes are blake2_256-hashed first, matching `polkadot-sdk`'s `SignedPayload::using_encoded`.
+4. Returns the full v4 wire form (with the SCALE-compact length prefix that RPC and polkadot-api decoders expect):
+
+   ```
+   [compact len]                       length of the bytes that follow
+   [0x84]                              v4 + signed bit
+   [0x00 + AccountId32 (32 bytes)]     MultiAddress::Id
+   [0x01 + signature (64 bytes)]       MultiSignature::Sr25519
+   [extras concat]                     each extension's `extra`, in order
+   [callData]
+   ```
+
+`extrinsic.version` on paseo-asset-hub-next is `[4]` — there is no v5 in that runtime. So `0.8.3` ships v4-signed only. If your target runtime negotiates v5 general extrinsics, file an issue — v5 support is a follow-up.
+
+### 4. Push notification protocol
+
+- `host_push_notification` request gained an optional `scheduledAt: bigint` (epoch-ms) for future-delivery notifications.
+- Response is now `Result<NotificationId, PushNotificationError>` instead of `Result<void, GenericError>`. The host returns a `u32` id; products can hold on to it.
+- New `handlePushNotificationCancel(id)` handler. The test host marks the matching log entry's `cancelled = true`.
+- New `PushNotificationError::ScheduleLimitReached` variant available for hosts that want to reject when their queue is full.
+- `NotificationLogEntry` gained `id`, `scheduledAt`, and `cancelled`. Tests that snapshot the whole entry need updating; spot-checks on individual fields still work.
+
+## Non-breaking notes
+
+- Attestation has moved off the Host onto the paired Polkadot Mobile app — no SDK-facing change, but if you assert on SSO traffic in product tests, expect different message shapes.
+- `getProductAccountSigner` (in `host-api-wrapper`) now routes `signTx` through `host_create_transaction` and returns the full signed extrinsic by default. Pass `'signPayload'` as the second argument to opt back into the previous behaviour.
 
 ## What you need to do
 
-- Upgrade to `0.8.2`. No product-side code change required — the wrapper API didn't move.
+- Upgrade to `0.8.3` (drop `0.8.0`/`0.8.1`/`0.8.2` if you ever pinned them).
+- Replace `@novasamatech/product-sdk` with `@novasamatech/host-api-wrapper` in your `package.json` and imports.
 - If you constructed `createTransaction` requests by hand, switch to the flat `ProductAccountTransaction` shape and include `genesisHash`.
 - If your tests asserted on the bytes being equal to `callData`, drop that assumption and decode the response as a v4 extrinsic instead.
-- If your runtime negotiates v5 general extrinsics, file an issue — v5 support is a follow-up.
-
-`0.8.0` and `0.8.1` are superseded; skip straight to `0.8.2`.
+- If you have a custom `handlePushNotification`, change `ok(undefined)` → `ok(<id>)`.
 
 ---

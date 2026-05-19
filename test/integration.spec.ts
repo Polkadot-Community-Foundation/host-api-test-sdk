@@ -517,6 +517,39 @@ test.describe('Push notifications', () => {
       await host.close();
     }
   });
+
+  test('scheduled notification is logged with scheduledAt and can be cancelled', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.pushNotification('later', undefined, Date.now() + 60_000),
+      );
+      expect(result.ok).toBe(true);
+      expect(typeof result.notificationId).toBe('number');
+
+      const before = await page.evaluate(() => window.__TEST_HOST__.getNotificationLog());
+      expect(before).toHaveLength(1);
+      expect(before[0].cancelled).toBe(false);
+      expect(typeof before[0].scheduledAt).toBe('bigint');
+
+      const cancel = await product.evaluate((id: number) =>
+        window.__TEST_PRODUCT__.pushNotificationCancel(id),
+        result.notificationId!,
+      );
+      expect(cancel.ok).toBe(true);
+
+      const after = await page.evaluate(() => window.__TEST_HOST__.getNotificationLog());
+      expect(after[0].cancelled).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
 });
 
 // ── Account alias ───────────────────────────────────────────────────
