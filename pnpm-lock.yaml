@@ -9,18 +9,18 @@ importers:
   .:
     dependencies:
       '@novasamatech/host-api':
-        specifier: 0.7.9-4
-        version: 0.7.9-4
+        specifier: ^0.7.9
+        version: 0.7.9
       '@playwright/test':
         specifier: '>=1.0.0'
         version: 1.58.2
     devDependencies:
+      '@novasamatech/host-api-wrapper':
+        specifier: ^0.7.9
+        version: 0.7.9(@polkadot/api@16.5.6)(@polkadot/util@14.0.1)(esbuild@0.25.12)(rxjs@7.8.2)
       '@novasamatech/host-container':
-        specifier: 0.7.9-4
-        version: 0.7.9-4(esbuild@0.25.12)(rxjs@7.8.2)
-      '@novasamatech/product-sdk':
-        specifier: 0.7.9-4
-        version: 0.7.9-4(@polkadot/api@16.5.6)(@polkadot/util@14.0.1)(esbuild@0.25.12)(rxjs@7.8.2)
+        specifier: ^0.7.9
+        version: 0.7.9(esbuild@0.25.12)(rxjs@7.8.2)
       '@polkadot/keyring':
         specifier: ^14.0.0
         version: 14.0.1(@polkadot/util-crypto@14.0.1(@polkadot/util@14.0.1))(@polkadot/util@14.0.1)
@@ -232,17 +232,17 @@ packages:
     resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
     engines: {node: '>= 20.19.0'}
 
-  '@novasamatech/host-api@0.7.9-4':
-    resolution: {integrity: sha512-bwDUWWGKgb4BUuVFjUOqNXLXfXjzO4+cwlZD7TXvVLSmd9DQnELjig4i5//hD8/a+jdgrnXa9loO2hfc/i05Jw==}
+  '@novasamatech/host-api-wrapper@0.7.9':
+    resolution: {integrity: sha512-Z1bAUz1bPRiwCxrzktI6pd7ne+p33aH1ffzItRlBheWTTWaRRgSFD9COtUYj9yb1KHGNXjj3fNWxoY2DR1/CMg==}
 
-  '@novasamatech/host-container@0.7.9-4':
-    resolution: {integrity: sha512-wp91m0KIbcA25YJAFipWF7gAlUmOBg63DMbSD736ghksdiQ/Xb6d3X2wlccZJRA0i6y3+E0CGFwfkkqd1W8XXw==}
+  '@novasamatech/host-api@0.7.9':
+    resolution: {integrity: sha512-3/dOennEXjLvDCj8S4F+siwhUAHPK4PwY29+W1L8BhzNZ/CRcoAMZ959C39X3bhGIy1Wn93L6SrJz6zo2sH7FA==}
 
-  '@novasamatech/product-sdk@0.7.9-4':
-    resolution: {integrity: sha512-BPwRNEV+9dXWzILfMWKQdaM7RKm1uZlIFVrxlM6bj3LsGBxekPj/qYB+HeRT8cWseiw2c8zzS7Q4OvKb8ZAUqQ==}
+  '@novasamatech/host-container@0.7.9':
+    resolution: {integrity: sha512-31oG29RX72+/VoNo3aUzeMLFHf/T5MtrSvSrXEwDt3SF69irE6IxixEdHZUMeJCZj7OBcsCQIPytWoUa/klUFA==}
 
-  '@novasamatech/scale@0.7.9-4':
-    resolution: {integrity: sha512-wBBapBLskrRaKVMmRmzhn8SJl8gEifqxWdKL0eOmTFR/6GPl4EY5MjYO+5WLARFvLdFqQ4PBegx3TjZBBFNeYA==}
+  '@novasamatech/scale@0.7.9':
+    resolution: {integrity: sha512-tQimsOkz6zYNInBfHwOVMWyZkUH14WxJ3ezcTpMjMLm/r4x4niUqMWZqWiuqW8kYG4wRFtEBeynIVqknB84NqQ==}
 
   '@playwright/test@1.58.2':
     resolution: {integrity: sha512-akea+6bHYBBfA9uQqSYmlJXn61cTa+jbO87xVLCWbTqbWadRVmhxlXATaOjOgcBaWU4ePo0wB41KMFv3o35IXA==}
@@ -1314,32 +1314,9 @@ snapshots:
 
   '@noble/hashes@2.2.0': {}
 
-  '@novasamatech/host-api@0.7.9-4':
+  '@novasamatech/host-api-wrapper@0.7.9(@polkadot/api@16.5.6)(@polkadot/util@14.0.1)(esbuild@0.25.12)(rxjs@7.8.2)':
     dependencies:
-      '@novasamatech/scale': 0.7.9-4
-      nanoevents: 9.1.0
-      nanoid: 5.1.9
-      neverthrow: 8.2.0
-      scale-ts: 1.6.1
-
-  '@novasamatech/host-container@0.7.9-4(esbuild@0.25.12)(rxjs@7.8.2)':
-    dependencies:
-      '@noble/hashes': 2.2.0
-      '@novasamatech/host-api': 0.7.9-4
-      '@polkadot-api/substrate-client': 0.7.0
-      nanoid: 5.1.9
-      neverthrow: 8.2.0
-      polkadot-api: 2.0.2(esbuild@0.25.12)(rxjs@7.8.2)
-    transitivePeerDependencies:
-      - bufferutil
-      - esbuild
-      - rxjs
-      - supports-color
-      - utf-8-validate
-
-  '@novasamatech/product-sdk@0.7.9-4(@polkadot/api@16.5.6)(@polkadot/util@14.0.1)(esbuild@0.25.12)(rxjs@7.8.2)':
-    dependencies:
-      '@novasamatech/host-api': 0.7.9-4
+      '@novasamatech/host-api': 0.7.9
       '@polkadot-api/json-rpc-provider-proxy': 0.4.0
       '@polkadot-api/substrate-bindings': 0.20.2
       '@polkadot/extension-inject': 0.63.1(@polkadot/api@16.5.6)(@polkadot/util@14.0.1)
@@ -1354,7 +1331,31 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@novasamatech/scale@0.7.9-4':
+  '@novasamatech/host-api@0.7.9':
+    dependencies:
+      '@novasamatech/scale': 0.7.9
+      nanoevents: 9.1.0
+      nanoid: 5.1.9
+      neverthrow: 8.2.0
+      scale-ts: 1.6.1
+
+  '@novasamatech/host-container@0.7.9(esbuild@0.25.12)(rxjs@7.8.2)':
+    dependencies:
+      '@noble/hashes': 2.2.0
+      '@novasamatech/host-api': 0.7.9
+      '@polkadot-api/substrate-client': 0.7.0
+      nanoevents: 9.1.0
+      nanoid: 5.1.9
+      neverthrow: 8.2.0
+      polkadot-api: 2.0.2(esbuild@0.25.12)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - bufferutil
+      - esbuild
+      - rxjs
+      - supports-color
+      - utf-8-validate
+
+  '@novasamatech/scale@0.7.9':
     dependencies:
       '@polkadot-api/utils': 0.4.0
       scale-ts: 1.6.1

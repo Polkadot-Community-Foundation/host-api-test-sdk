@@ -13,6 +13,7 @@ import {
   ChatMessagePostingErr,
   CreateTransactionErr,
   DeriveEntropyErr,
+  GenericError,
   GetUserIdErr,
   LoginErr,
   NavigateToErr,
@@ -115,6 +116,7 @@ const paymentStatuses = new Map<string, { tag: string; value?: string }>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const paymentStatusSubscribers = new Map<string, Set<(status: any) => void>>();
 let paymentCounter = 0;
+let nextNotificationId = 1;
 let currentTheme: "light" | "dark" = "light";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const themeSubscribers = new Set<(theme: any) => void>();
@@ -734,16 +736,31 @@ function setupContainer(
   // The test host records notifications so tests can assert what was sent.
 
   container.handlePushNotification((params, { ok }) => {
+    const id = nextNotificationId++;
     notificationLog.push({
+      id,
       text: params.text,
       deeplink: params.deeplink,
+      scheduledAt: params.scheduledAt,
+      cancelled: false,
       timestamp: Date.now(),
     });
     console.log(
       "[test-host] Notification:",
+      `#${id}`,
       params.text,
       params.deeplink ? `(deeplink: ${params.deeplink})` : "",
+      params.scheduledAt !== undefined ? `(scheduledAt: ${params.scheduledAt})` : "",
     );
+    return ok(id);
+  });
+
+  container.handlePushNotificationCancel((id, { ok, err }) => {
+    const entry = notificationLog.find((e) => e.id === id);
+    if (!entry) {
+      return err(new GenericError({ reason: `Notification id not found: ${id}` }));
+    }
+    entry.cancelled = true;
     return ok(undefined);
   });
 

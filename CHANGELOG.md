@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.3
+
+### Changed
+
+- **Upstream `@novasamatech/*` → `^0.7.9` (final)**. Caret is safe again now that upstream is on a stable point release. The package previously named `@novasamatech/product-sdk` is now `@novasamatech/host-api-wrapper` — no compat re-export under the old name. Our test-product's import is updated; consumers writing their own test-product need to do the same when they bump their own copy.
+- **Push notifications**: protocol gained `scheduledAt: bigint | undefined` on the request and now returns a `NotificationId` (u32). `NotificationLogEntry` adds `id`, `scheduledAt`, and `cancelled`. The test host accepts and records both; no existing assertion in our integration suite (or any pinned `^0.8.2` consumer surveyed) breaks.
+
+### Added
+
+- **`handlePushNotificationCancel`**: new container handler in upstream `0.7.9`. The test host marks the matching log entry's `cancelled = true` and returns `ok(undefined)`; unknown id returns `GenericError`.
+- **Integration test** covering `scheduledAt` + the cancel round-trip.
+
+### Notes
+
+`host_create_transaction`'s on-the-wire shape is unchanged from `0.8.x` — the v4 signed extrinsic produced by `0.8.2` is still valid. The only protocol-shape changes in upstream `0.7.9` are around notifications.
+
 ## 0.8.2
 
 ### Fixed

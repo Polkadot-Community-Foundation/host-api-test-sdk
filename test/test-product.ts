@@ -8,7 +8,7 @@
  * and signing E2E tests.
  */
 
-import { createAccountsProvider, hostApi, sandboxTransport } from '@novasamatech/product-sdk';
+import { createAccountsProvider, hostApi, sandboxTransport } from '@novasamatech/host-api-wrapper';
 import { enumValue } from '@novasamatech/host-api';
 import { hexToU8a, u8aToHex } from '@polkadot/util';
 
@@ -20,6 +20,7 @@ interface TestResult {
   approved?: boolean;
   signature?: string;
   signedHex?: string;
+  notificationId?: number;
   error?: string;
 }
 
@@ -44,7 +45,8 @@ declare global {
       requestRemote(url: string): Promise<TestResult>;
       requestDevicePermission(type: string): Promise<TestResult>;
       navigateTo(url: string): Promise<TestResult>;
-      pushNotification(text: string, deeplink?: string): Promise<TestResult>;
+      pushNotification(text: string, deeplink?: string, scheduledAt?: number): Promise<TestResult>;
+      pushNotificationCancel(id: number): Promise<TestResult>;
       getAccountAlias(dotnsId: string, index: number): Promise<TestResult & { context?: string; alias?: string }>;
       chatCreateRoom(room: { roomId: string; name: string; icon: string }): Promise<TestResult & { status?: string }>;
       chatRegisterBot(bot: { botId: string; name: string; icon: string }): Promise<TestResult & { status?: string }>;
@@ -190,12 +192,24 @@ async function init() {
         }
       },
 
-      async pushNotification(text: string, deeplink?: string): Promise<TestResult> {
+      async pushNotification(text: string, deeplink?: string, scheduledAt?: number): Promise<TestResult> {
         try {
-          const r = await hostApi.pushNotification(enumValue('v1', { text, deeplink }));
+          const r = await hostApi.pushNotification(
+            enumValue('v1', { text, deeplink, scheduledAt: scheduledAt !== undefined ? BigInt(scheduledAt) : undefined }),
+          );
           if (r.isOk()) {
-            return { ok: true };
+            return { ok: true, notificationId: (r.value as { tag: string; value: number }).value };
           }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      async pushNotificationCancel(id: number): Promise<TestResult> {
+        try {
+          const r = await hostApi.pushNotificationCancel(enumValue('v1', id));
+          if (r.isOk()) return { ok: true };
           return { ok: false, error: extractError(r.error) };
         } catch (err) {
           return { ok: false, error: extractError(err) };
