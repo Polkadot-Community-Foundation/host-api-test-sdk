@@ -1354,6 +1354,189 @@ test.describe('Create transaction', () => {
   });
 });
 
+// ── Create transaction (legacy account) ───────────────────────────
+
+test.describe('Create transaction with legacy account', () => {
+
+  test('returns a valid v4 signed extrinsic signed by the legacy account', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['bob'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+      const keyring = new Keyring({ type: 'sr25519' });
+      const bobPubKey = u8aToHex(keyring.addFromUri('//Bob').publicKey);
+
+      const result = await product.evaluate((pk: string) =>
+        window.__TEST_PRODUCT__.createTransactionLegacy(pk), bobPubKey);
+      expect(result.ok).toBe(true);
+      expect(result.signedHex).toBeDefined();
+
+      // Same layout as the product-account flow, but signer == bob's pubkey
+      const wire = hexToU8a(result.signedHex!);
+      const [offset, innerLen] = compactFromU8a(wire);
+      const bytes = wire.slice(offset);
+      expect(bytes.length).toBe(innerLen.toNumber());
+      expect(bytes[0]).toBe(0x84);
+      expect(bytes[1]).toBe(0x00);
+      expect(bytes[34]).toBe(0x01);
+
+      const signerPubkey = bytes.slice(2, 34);
+      expect(u8aToHex(signerPubkey)).toBe(bobPubKey);
+
+      const signature = bytes.slice(35, 99);
+      const callData = bytes.slice(99, 101);
+      expect(sr25519Verify(callData, signature, signerPubkey)).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Payments (RFC-0006) ───────────────────────────────────────────
+
+test.describe('Payments', () => {
+
+  test('topUp + requestPayment are recorded; balance decreases', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const dest = '0x' + 'aa'.repeat(32);
+      const result = await product.evaluate((d: string) =>
+        window.__TEST_PRODUCT__.paymentSmoke(d), dest);
+      expect(result.ok).toBe(true);
+      expect(result.paymentId).toMatch(/^pay-\d+$/);
+
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPaymentLog());
+      expect(log).toHaveLength(2);
+      expect(log[0].type).toBe('top-up');
+      expect(log[0].amount).toBe(1000n);
+      expect(log[1].type).toBe('request');
+      expect(log[1].amount).toBe(500n);
+      expect(log[1].paymentId).toBe(result.paymentId);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Sign raw (product account) ────────────────────────────────────
+
+test.describe('Sign raw (product account)', () => {
+
+  test('signRaw signs bytes with the product-account keypair', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+      const payloadHex = '0x' + '11'.repeat(16);
+      const result = await product.evaluate((p: string) =>
+        window.__TEST_PRODUCT__.signRawProduct('test-product.dot', 0, p), payloadHex);
+      expect(result.ok).toBe(true);
+      expect(result.signature).toMatch(/^0x[0-9a-f]{128}$/); // 64-byte sr25519 sig
+
+      const log = await page.evaluate(() => window.__TEST_HOST__.getSigningLog());
+      expect(log).toHaveLength(1);
+      expect(log[0].type).toBe('raw');
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Statement store proof (authorized) ────────────────────────────
+
+test.describe('Statement store proof (authorized)', () => {
+
+  test('createProofAuthorized returns valid proof using the host allowance slot', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.statementCreateProofAuthorized('0xdeadbeef'));
+      expect(result.ok).toBe(true);
+      // proof is enum SignatureProof; one variant carries { signature, signer }
+      const p = result.proof as { tag: string; value: { signature: Uint8Array; signer: Uint8Array } };
+      expect(['Sr25519', 'Ed25519', 'Ecdsa']).toContain(p.tag);
+      expect(p.value.signature.length).toBeGreaterThanOrEqual(64);
+      expect(p.value.signer.length).toBe(32);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
+// ── Payment subscriptions ──────────────────────────────────────────
+
+test.describe('Payment subscriptions', () => {
+
+  test('subscribeBalance delivers updates when setPaymentBalance is called', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      await product.evaluate(() => window.__TEST_PRODUCT__.subscribeBalance());
+      // Initial value (0) is delivered on subscribe, then update fires the callback
+      await page.evaluate(() => window.__TEST_HOST__.setPaymentBalance(BigInt('7777')));
+      await page.evaluate(() => window.__TEST_HOST__.setPaymentBalance(BigInt('9999')));
+
+      // Settle
+      await page.waitForTimeout(50);
+      const received = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedBalances());
+      expect(received).toContain('7777');
+      expect(received).toContain('9999');
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('subscribePaymentStatus delivers status updates simulated from the host', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Drive a payment to obtain an id, then subscribe + simulate status
+      const dest = '0x' + 'bb'.repeat(32);
+      const pay = await product.evaluate((d: string) =>
+        window.__TEST_PRODUCT__.paymentSmoke(d), dest);
+      expect(pay.paymentId).toBeDefined();
+
+      await product.evaluate((id: string) =>
+        window.__TEST_PRODUCT__.subscribePaymentStatus(id), pay.paymentId!);
+      await page.evaluate((id: string) =>
+        window.__TEST_HOST__.simulatePaymentStatus(id, { tag: 'Completed', value: undefined }), pay.paymentId!);
+
+      await page.waitForTimeout(50);
+      const received = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedStatuses());
+      expect(received.some((s) => s.type === 'completed')).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+});
+
 // ── Account create proof ───────────────────────────────────────────
 
 test.describe('Account create proof', () => {

@@ -8,7 +8,7 @@
  * and signing E2E tests.
  */
 
-import { createAccountsProvider, hostApi, sandboxTransport } from '@novasamatech/host-api-wrapper';
+import { createAccountsProvider, hostApi, paymentManager, sandboxTransport } from '@novasamatech/host-api-wrapper';
 import { enumValue } from '@novasamatech/host-api';
 import { hexToU8a, u8aToHex } from '@polkadot/util';
 
@@ -21,6 +21,7 @@ interface TestResult {
   signature?: string;
   signedHex?: string;
   notificationId?: number;
+  paymentId?: string;
   error?: string;
 }
 
@@ -73,6 +74,14 @@ declare global {
       localStorageRead(key: string): Promise<TestResult & { value?: string | null }>;
       localStorageClear(key: string): Promise<TestResult>;
       createTransaction(dotnsId: string, index: number): Promise<TestResult>;
+      createTransactionLegacy(publicKeyHex: string): Promise<TestResult>;
+      paymentSmoke(destinationHex: string): Promise<TestResult>;
+      statementCreateProofAuthorized(dataHex: string): Promise<TestResult>;
+      signRawProduct(dotnsId: string, index: number, payloadHex: string): Promise<TestResult>;
+      subscribeBalance(): { unsubscribe(): void };
+      getReceivedBalances(): string[];
+      subscribePaymentStatus(id: string): { unsubscribe(): void };
+      getReceivedStatuses(): Array<{ type: string; reason?: string }>;
       accountCreateProof(dotnsId: string, index: number): Promise<TestResult & { proofHex?: string }>;
     };
   }
@@ -81,6 +90,8 @@ declare global {
 const receivedChatActions: unknown[] = [];
 const receivedStatements: unknown[] = [];
 const receivedThemes: string[] = [];
+const receivedBalances: string[] = []; // bigint serialised as string
+const receivedStatuses: Array<{ type: string; reason?: string }> = [];
 
 async function init() {
   const el = document.getElementById('status')!;
@@ -533,6 +544,95 @@ async function init() {
         } catch (err) {
           return { ok: false, error: extractError(err) };
         }
+      },
+
+      // ── Create transaction (legacy account, signer = raw 32B pubkey) ──
+      async createTransactionLegacy(publicKeyHex: string) {
+        try {
+          const payload = {
+            signer: hexToU8a(publicKeyHex),
+            genesisHash: new Uint8Array(32),
+            callData: new Uint8Array([0, 0]),
+            extensions: [] as Array<{ id: string; extra: Uint8Array; additionalSigned: Uint8Array }>,
+            txExtVersion: 0,
+          };
+          const r = await hostApi.createTransactionWithLegacyAccount(enumValue('v1', payload));
+          if (r.isOk()) {
+            const inner = (r.value as { tag: string; value: Uint8Array }).value;
+            return { ok: true, signedHex: u8aToHex(inner) };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Payment smoke: topUp + requestPayment via paymentManager ──────
+      async paymentSmoke(destinationHex: string) {
+        try {
+          await paymentManager.topUp(1000n, { type: 'productAccount', derivationIndex: 0 });
+          const req = await paymentManager.requestPayment(500n, hexToU8a(destinationHex));
+          return { ok: true, paymentId: req.id };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Statement store proof (authorized — host allowance slot) ─────
+      async statementCreateProofAuthorized(dataHex: string) {
+        try {
+          const statement = {
+            proof: undefined,
+            decryptionKey: undefined,
+            expiry: undefined,
+            channel: undefined,
+            topics: [],
+            data: hexToU8a(dataHex),
+          };
+          const r = await hostApi.statementStoreCreateProofAuthorized(enumValue('v1', statement));
+          if (r.isOk()) return { ok: true, proof: r.value.value };
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Sign raw (product-account flow) ───────────────────────────────
+      async signRawProduct(dotnsId: string, index: number, payloadHex: string) {
+        try {
+          const r = await hostApi.signRaw(enumValue('v1', {
+            account: [dotnsId, index] as [string, number],
+            payload: { tag: 'Bytes' as const, value: hexToU8a(payloadHex) },
+          }));
+          if (r.isOk()) {
+            return { ok: true, signature: (r.value as { tag: string; value: { signature: `0x${string}` } }).value.signature };
+          }
+          return { ok: false, error: extractError(r.error) };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // ── Payment subscribe: balance ────────────────────────────────────
+      subscribeBalance() {
+        const sub = paymentManager.subscribeBalance((balance) => {
+          receivedBalances.push(balance.available.toString());
+        });
+        return { unsubscribe() { sub.unsubscribe(); } };
+      },
+      getReceivedBalances() {
+        return [...receivedBalances];
+      },
+
+      // ── Payment subscribe: status ─────────────────────────────────────
+      subscribePaymentStatus(id: string) {
+        const sub = paymentManager.subscribePaymentStatus(id, (status) => {
+          receivedStatuses.push(status as { type: string; reason?: string });
+        });
+        return { unsubscribe() { sub.unsubscribe(); } };
+      },
+      getReceivedStatuses() {
+        return [...receivedStatuses];
       },
 
       // ── Account create proof ──────────────────────────────────

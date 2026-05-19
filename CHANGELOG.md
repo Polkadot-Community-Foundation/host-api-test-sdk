@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Internal
+
+- Integration-test coverage uplift — handlers that previously shipped without tests now have specs that run in CI before publish. No consumer-facing changes; these guard against silent regression in: `handleCreateTransactionWithLegacyAccount`, `handlePaymentTopUp` / `handlePaymentRequest`, `handleSignRaw` (product account), `handleStatementStoreCreateProofAuthorized`, and the `handlePaymentBalanceSubscribe` / `handlePaymentStatusSubscribe` delivery paths.
+
 ## 0.8.3
 
 ### Changed
