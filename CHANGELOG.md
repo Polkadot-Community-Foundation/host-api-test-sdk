@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.8.4
 
-### Internal
+### Fixed
 
-- Integration-test coverage uplift — handlers that previously shipped without tests now have specs that run in CI before publish. No consumer-facing changes; these guard against silent regression in: `handleCreateTransactionWithLegacyAccount`, `handlePaymentTopUp` / `handlePaymentRequest`, `handleSignRaw` (product account), `handleStatementStoreCreateProofAuthorized`, and the `handlePaymentBalanceSubscribe` / `handlePaymentStatusSubscribe` delivery paths.
+- **`getIsAuthenticated()` now reflects login state correctly** ([#25](https://github.com/paritytech/host-api-test-sdk/issues/25)). Previously it defaulted to `true` on page load, which meant `setLoginBehavior('reject')` was silently ignored — the host short-circuited login with `'alreadyConnected'` before consulting the behavior. The flag is now `false` until a successful login (or `simulateReconnect()`), and is explicitly reset to `false` on a rejected login. Tests asserting on the post-reject UX can now use `getIsAuthenticated()` as a reliable oracle.
+
+### Added
+
+- **README — "What `permissionLog` records (and what it doesn't)"** section ([#24](https://github.com/paritytech/host-api-test-sdk/issues/24)). Documents that signing is not gated behind ChainSubmit at the test-sdk level (deliberate 0.7.1 design), `permissionLog` only records explicit `hostApi.permission(...)` calls, and container-side `transaction_broadcast` denials aren't currently observable from the test-sdk.
 
 ## 0.8.3
 

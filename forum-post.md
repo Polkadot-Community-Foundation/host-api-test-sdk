@@ -440,3 +440,22 @@ What the handler does now:
 
 ---
 
+# host-api-test-sdk 0.8.4
+
+Two fixes addressing developer-reported issues. Drop-in upgrade from `0.8.3`.
+
+## Fixed
+
+- **`getIsAuthenticated()` now reflects login state** ([#25](https://github.com/paritytech/host-api-test-sdk/issues/25)). Previously the flag defaulted to `true` on page load, so `setLoginBehavior('reject')` was silently ignored — the host short-circuited login with `'alreadyConnected'`. Now it starts `false`, flips `true` on successful login (or `simulateReconnect()`), and resets to `false` on a rejected login. If your tests want a session pre-authenticated (e.g. for `getUserId`), call `simulateReconnect()` after `loadHostAndProduct`.
+
+## Documented
+
+- **What `permissionLog` records (and what it doesn't)** ([#24](https://github.com/paritytech/host-api-test-sdk/issues/24)). New README section makes the semantics explicit: signing isn't gated behind ChainSubmit at the test-sdk level (deliberate 0.7.1 design), `permissionLog` only records explicit `hostApi.permission(...)` calls, and `transaction_broadcast` denials happen inside `host-container` and aren't observable from the test-sdk today. If your assertion was "rejected permission prevented submission", the right oracle is the product's error UI, not the permission log.
+
+## What you need to do
+
+- Upgrade to `0.8.4`.
+- If any test relies on `getIsAuthenticated()` returning `true` on a fresh page, add `await testHost.simulateReconnect()` (or run a login) before the assertion.
+
+---
+

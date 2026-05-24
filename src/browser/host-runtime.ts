@@ -121,7 +121,7 @@ let currentTheme: "light" | "dark" = "light";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const themeSubscribers = new Set<(theme: any) => void>();
 let loginBehavior: LoginBehavior = "success";
-let isAuthenticated = true;
+let isAuthenticated = false;
 let permissionBehavior: PermissionBehavior = "approve-all";
 let enforcePermissions = true;
 let connectionStatus = "connecting";
@@ -1061,6 +1061,8 @@ function setupContainer(
 
     if (result === "success") {
       isAuthenticated = true;
+    } else {
+      isAuthenticated = false;
     }
 
     return ok(result as never);

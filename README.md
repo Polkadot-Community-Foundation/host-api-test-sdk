@@ -174,6 +174,23 @@ const log = await page.evaluate(() =>
 );
 ```
 
+### What `permissionLog` records (and what it doesn't)
+
+The permission log is narrower than the name suggests. It records **only explicit `hostApi.permission(...)` calls** — RemotePermission requests the product makes before signing or accessing a feature. It does **not** record:
+
+- **Signing requests** (`hostApi.signPayload` / `signRaw`). Signing is not gated behind a permission at the test-sdk level — that's a deliberate match with real hosts (the previous "ChainSubmit gates signing" behavior was reverted in 0.7.1). Use `getSigningLog()` as the oracle for "did signing happen".
+- **Transaction broadcast denials.** `ChainSubmit` is enforced inside `host-container` at the `transaction_broadcast` level, after signing. The container handles this internally; it never reaches the test-sdk's `handlePermission`, so it doesn't land in `permissionLog`. The current canonical oracle for "broadcast was denied" is whatever error your product surfaces in the UI; there's no test-sdk observable for it yet.
+
+A typical flow:
+
+```
+product → hostApi.permission(ChainSubmit) → handlePermission → permissionLog ✅
+product → hostApi.signPayload(...)        → handleSignPayload → signingLog   ✅
+product → submit signed bytes              → container's broadcast gate       ❌ invisible
+```
+
+If your test is asserting "permission rejected mid-session prevented submission", check the product's error UI rather than the permission log.
+
 ## How it works
 
 ```

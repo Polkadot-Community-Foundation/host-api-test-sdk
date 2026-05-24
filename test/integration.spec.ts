@@ -1118,7 +1118,7 @@ test.describe('Entropy', () => {
 
 test.describe('Login and user identity', () => {
 
-  test('requestLogin returns success when authenticated', async ({ page }) => {
+  test('requestLogin succeeds on a fresh page and flips getIsAuthenticated() to true', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -1126,6 +1126,31 @@ test.describe('Login and user identity', () => {
 
     try {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      expect(await page.evaluate(() => window.__TEST_HOST__.getIsAuthenticated())).toBe(false);
+
+      const result = await product.evaluate(() =>
+        window.__TEST_PRODUCT__.requestLogin('test'));
+      expect(result.ok).toBe(true);
+      expect(result.loginResult).toBe('success');
+
+      expect(await page.evaluate(() => window.__TEST_HOST__.getIsAuthenticated())).toBe(true);
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('requestLogin returns alreadyConnected when already authenticated', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Pre-authenticate
+      await page.evaluate(() => window.__TEST_HOST__.simulateReconnect());
 
       const result = await product.evaluate(() =>
         window.__TEST_PRODUCT__.requestLogin('test'));
@@ -1136,7 +1161,7 @@ test.describe('Login and user identity', () => {
     }
   });
 
-  test('requestLogin returns rejected when login behavior is reject', async ({ page }) => {
+  test('rejected login leaves getIsAuthenticated() false (regression for #25)', async ({ page }) => {
     const host = await createTestHostServer({
       productUrl: productServer.url,
       accounts: ['alice'],
@@ -1145,13 +1170,14 @@ test.describe('Login and user identity', () => {
     try {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
 
-      await page.evaluate(() => window.__TEST_HOST__.simulateDisconnect());
       await page.evaluate(() => window.__TEST_HOST__.setLoginBehavior('reject'));
 
       const result = await product.evaluate(() =>
         window.__TEST_PRODUCT__.requestLogin('please'));
       expect(result.ok).toBe(true);
       expect(result.loginResult).toBe('rejected');
+
+      expect(await page.evaluate(() => window.__TEST_HOST__.getIsAuthenticated())).toBe(false);
     } finally {
       await host.close();
     }
@@ -1165,6 +1191,9 @@ test.describe('Login and user identity', () => {
 
     try {
       const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // getUserId requires an authenticated session
+      await page.evaluate(() => window.__TEST_HOST__.simulateReconnect());
 
       const result = await product.evaluate(() =>
         window.__TEST_PRODUCT__.getUserId());
