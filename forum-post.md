@@ -440,6 +440,33 @@ What the handler does now:
 
 ---
 
+# host-api-test-sdk 0.8.5
+
+One fix. Drop-in upgrade from `0.8.4`. Thanks to [@BigTava](https://github.com/BigTava) for spotting this and contributing the initial fix.
+
+## Fixed
+
+- **Account handlers no longer throw on unsigned hosts** ([#31](https://github.com/paritytech/host-api-test-sdk/pull/31)). If you ran the test host with `accounts: []` (i.e. simulating "user hasn't logged in yet") and the product called `getProductAccount(...)` or `getProductAccountAlias(...)`, the handler tried to index `pairs[0]` and threw a synchronous `TypeError` inside the container. Now both handlers return `err(RequestCredentialsErr.NotConnected)`, which is what `polkadot-desktop` returns in the same state — your product gets the same `Result.err` it would see in production, and your tests can assert on it directly.
+
+The `productAccounts` override still wins, so this also works:
+
+```ts
+createTestHostFixture({
+  productUrl: 'http://localhost:3000',
+  accounts: [],                              // unsigned
+  productAccounts: { 'myapp.dot/0': 'bob' }, // explicit map still served
+});
+```
+
+Unmapped identities on an unsigned host now produce `NotConnected` instead of a thrown error.
+
+## What you need to do
+
+- Upgrade to `0.8.5`.
+- If a test was relying on the previous throw (very unlikely), switch it to assert on the `Result.err` returned by the product-sdk call.
+
+---
+
 # host-api-test-sdk 0.8.4
 
 Two fixes addressing developer-reported issues. Drop-in upgrade from `0.8.3`.

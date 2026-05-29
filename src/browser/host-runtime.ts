@@ -470,7 +470,7 @@ function setupContainer(
   // This lets tests map product accounts to funded dev accounts:
   //   productAccounts: { 'myapp.dot/0': 'bob' }
   //   → getProductAccount("myapp.dot", 0) returns //Bob's keypair
-  container.handleAccountGet((params, { ok }) => {
+  container.handleAccountGet((params, { ok, err }) => {
     const key = `${params[0]}/${params[1]}`;
     const override = config.productAccounts?.[key];
 
@@ -480,6 +480,10 @@ function setupContainer(
         publicKey: pair.publicKey,
         name: override.name,
       });
+    }
+
+    if (pairs.length === 0) {
+      return err(new RequestCredentialsErr.NotConnected(undefined));
     }
 
     // Default: derive from the selected account (production behavior)
@@ -502,9 +506,14 @@ function setupContainer(
   // session.getRingVrfAlias(). For test purposes, return a deterministic
   // (context, alias) pair derived from the product account — stable across
   // runs so tests can assert exact values if needed.
-  container.handleAccountGetAlias((params, { ok }) => {
+  container.handleAccountGetAlias((params, { ok, err }) => {
     const key = `${params[0]}/${params[1]}`;
     const override = config.productAccounts?.[key];
+
+    if (!override && pairs.length === 0) {
+      return err(new RequestCredentialsErr.NotConnected(undefined));
+    }
+
     const pair = override
       ? getPair(override.uri)
       : getPair(`${urisByPair.get(pairs[0].pair)}//${params[0]}/${params[1]}`);
