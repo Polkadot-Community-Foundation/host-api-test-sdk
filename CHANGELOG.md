@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.5
+
+### Fixed
+
+- **`handleAccountGet` and `handleAccountGetAlias` no longer throw on unsigned hosts** ([#31](https://github.com/paritytech/host-api-test-sdk/pull/31), reported and initial fix by [@BigTava](https://github.com/BigTava)). When `accounts: []` (no signed-in user), both handlers indexed `pairs[0]` without a guard, surfacing a synchronous `TypeError` instead of a protocol-level response. They now return `err(new RequestCredentialsErr.NotConnected(undefined))`, matching how `polkadot-desktop` reports `getProductAccount` / `getProductAccountAlias` calls made before login. The `productAccounts` override branch still wins for explicitly mapped identities, so tests that pre-map accounts continue to work with `accounts: []`.
+
 ## 0.8.4
 
 ### Fixed

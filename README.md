@@ -266,7 +266,7 @@ createTestHostFixture({
 > });
 > ```
 >
-> Unmapped identities fall back to production-style derivation (`//Bob//dotnsId/index`).
+> Unmapped identities fall back to production-style derivation (`//Bob//dotnsId/index`). If `accounts: []` (unsigned host), unmapped `getProductAccount` / `getProductAccountAlias` calls return `err(RequestCredentialsErr.NotConnected)`, matching `polkadot-desktop`. Pre-mapped entries in `productAccounts` are still served.
 
 ### Built-in chains
 
