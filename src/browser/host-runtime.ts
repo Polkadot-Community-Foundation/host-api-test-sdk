@@ -470,7 +470,7 @@ function setupContainer(
   // This lets tests map product accounts to funded dev accounts:
   //   productAccounts: { 'myapp.dot/0': 'bob' }
   //   → getProductAccount("myapp.dot", 0) returns //Bob's keypair
-  container.handleAccountGet((params, { ok }) => {
+  container.handleAccountGet((params, { ok, err }) => {
     const key = `${params[0]}/${params[1]}`;
     const override = config.productAccounts?.[key];
 
@@ -480,6 +480,10 @@ function setupContainer(
         publicKey: pair.publicKey,
         name: override.name,
       });
+    }
+
+    if (pairs.length === 0) {
+      return err(new RequestCredentialsErr.NotConnected());
     }
 
     // Default: derive from the selected account (production behavior)
