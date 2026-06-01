@@ -3,7 +3,7 @@ import type { ChainConfig, HexString } from './types.js';
 export const PASEO_ASSET_HUB: ChainConfig = {
   id: 'paseo-asset-hub',
   name: 'Paseo Asset Hub',
-  genesisHash: '0x173cea9df45656cf612c8b8ece56e04e9a693c69cfaac47d3628dae735067af8' as HexString,
+  genesisHash: '0xbf0488dbe9daa1de1c08c5f743e26fdc2a4ecd74cf87dd1b4b1eeb99ae4ef19f' as HexString,
   rpcUrl: 'wss://paseo-asset-hub-next-rpc.polkadot.io',
   tokenSymbol: 'PAS',
   tokenDecimals: 10,
