@@ -1,3 +1,56 @@
+# host-api-test-sdk 0.9.0
+
+Tracks upstream `@novasamatech/*@^0.8.0` ([triangle-js-sdks#179](https://github.com/paritytech/triangle-js-sdks/pull/179)). v0.8 is **wire-incompatible** with v0.7 — there is no compatibility shim, so your product side must be on `@novasamatech/host-api@^0.8.0` too. The [v0.8 migration guide](https://github.com/paritytech/triangle-js-sdks/blob/release/0.8/docs/migration/v0.8.md) lists all the product-side touchpoints; most products that use `createPapiProvider` for chain access and `@novasamatech/product-react-renderer` for custom chat don't need code changes.
+
+## What changed on our side
+
+### Theme subscription is a struct now
+
+The host now delivers a `Theme` struct on `host_theme_subscribe` instead of the flat `'light' | 'dark'` enum:
+
+```ts
+type Theme = {
+  name: { tag: 'Default'; value: undefined } | { tag: 'Custom'; value: string };
+  variant: 'Light' | 'Dark';
+};
+```
+
+`setTheme('light' | 'dark')` keeps working as a shorthand — it maps to `{ name: { tag: 'Default', value: undefined }, variant: 'Light' | 'Dark' }`. New: you can pass the full struct to test product branches that read `theme.name`:
+
+```ts
+await testHost.setTheme({
+  name: { tag: 'Custom', value: 'midnight' },
+  variant: 'Dark',
+});
+```
+
+`getTheme()` returns the struct — use `theme.variant` where you previously had `'light'/'dark'`.
+
+### Payment log records the purse selector
+
+Upstream v0.8 added an optional purse selector to `topUp` (`into`) and `requestPayment` (`from`) per RFC-0017. The test host now surfaces the selector on `PaymentLogEntry.purse`:
+
+```ts
+await testHost.getPaymentLog();
+// → [{ type: 'top-up', amount: 1000n, purse: 7, ... },
+//    { type: 'request', amount: 500n, purse: 7, ... }]
+```
+
+Calls that omit the selector still target the main purse and the log entry's `purse` is `undefined`.
+
+### Variant rename: `BulletInAllowance` → `BulletinAllowance`
+
+If you hand-build resource-allocation requests in a test, rename the tag. Products going through the wrapper need no change.
+
+## What you need to do
+
+1. Upgrade to `0.9.0` and bump your product's `@novasamatech/host-api` (and related) to `^0.8.0` at the same time.
+2. If you call `subscribeTheme(cb)` in your product or `getTheme()` in tests, switch to reading `theme.variant` (note the capitalization: `'Light' | 'Dark'`). Or branch on `theme.name.tag === 'Custom'` if you support custom themes.
+3. Grep tests for `BulletInAllowance` and rename to `BulletinAllowance`.
+4. Re-verify any custom signing flows (`withSignedTransaction`) and custom chat renderers — the upstream `OptionBool` encoding fix flips `true`/`false` against older peers. The test SDK rides through the upstream fix transparently; you should not need to change code, just re-run your suite.
+
+---
+
 # host-api-test-sdk 0.4.0
 
 ## Product account mapping

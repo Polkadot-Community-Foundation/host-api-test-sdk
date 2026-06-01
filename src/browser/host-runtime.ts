@@ -52,6 +52,8 @@ import type {
   SigningLogEntry,
   StatementSubmissionLogEntry,
   TestHostAPI,
+  Theme,
+  ThemeInput,
 } from "../types.js";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -117,9 +119,21 @@ const paymentStatuses = new Map<string, { tag: string; value?: string }>();
 const paymentStatusSubscribers = new Map<string, Set<(status: any) => void>>();
 let paymentCounter = 0;
 let nextNotificationId = 1;
-let currentTheme: "light" | "dark" = "light";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const themeSubscribers = new Set<(theme: any) => void>();
+let currentTheme: Theme = {
+  name: { tag: "Default", value: undefined },
+  variant: "Light",
+};
+const themeSubscribers = new Set<(theme: Theme) => void>();
+
+function normalizeTheme(input: ThemeInput): Theme {
+  if (input === "light" || input === "dark") {
+    return {
+      name: { tag: "Default", value: undefined },
+      variant: input === "light" ? "Light" : "Dark",
+    };
+  }
+  return input;
+}
 let loginBehavior: LoginBehavior = "success";
 let isAuthenticated = false;
 let permissionBehavior: PermissionBehavior = "approve-all";
@@ -1092,6 +1106,7 @@ function setupContainer(
       type: "top-up",
       amount: params.amount,
       source: params.source,
+      purse: params.into,
       timestamp: Date.now(),
     });
     paymentBalance += params.amount;
@@ -1116,6 +1131,7 @@ function setupContainer(
       amount: params.amount,
       destination: params.destination,
       paymentId,
+      purse: params.from,
       timestamp: Date.now(),
     });
 
@@ -1373,10 +1389,10 @@ async function init(): Promise<void> {
       return currentTheme;
     },
 
-    setTheme(theme: "light" | "dark") {
-      currentTheme = theme;
+    setTheme(theme: ThemeInput) {
+      currentTheme = normalizeTheme(theme);
       for (const sub of themeSubscribers) {
-        sub(theme);
+        sub(currentTheme);
       }
     },
 

@@ -64,7 +64,7 @@ declare global {
       clearReceivedStatements(): void;
       // v0.7+ additions
       subscribeTheme(): { unsubscribe(): void };
-      getReceivedThemes(): string[];
+      getReceivedThemes(): unknown[];
       deriveEntropy(keyHex: string): Promise<TestResult & { entropyHex?: string }>;
       requestLogin(reason?: string): Promise<TestResult & { loginResult?: string }>;
       getUserId(): Promise<TestResult & { primaryUsername?: string }>;
@@ -76,6 +76,7 @@ declare global {
       createTransaction(dotnsId: string, index: number): Promise<TestResult>;
       createTransactionLegacy(publicKeyHex: string): Promise<TestResult>;
       paymentSmoke(destinationHex: string): Promise<TestResult>;
+      paymentSmokeWithPurse(destinationHex: string, purse: number): Promise<TestResult>;
       statementCreateProofAuthorized(dataHex: string): Promise<TestResult>;
       signRawProduct(dotnsId: string, index: number, payloadHex: string): Promise<TestResult>;
       subscribeBalance(): { unsubscribe(): void };
@@ -89,7 +90,7 @@ declare global {
 
 const receivedChatActions: unknown[] = [];
 const receivedStatements: unknown[] = [];
-const receivedThemes: string[] = [];
+const receivedThemes: unknown[] = [];
 const receivedBalances: string[] = []; // bigint serialised as string
 const receivedStatuses: Array<{ type: string; reason?: string }> = [];
 
@@ -424,7 +425,7 @@ async function init() {
       subscribeTheme() {
         const sub = hostApi.themeSubscribe(enumValue('v1', undefined), (payload: unknown) => {
           const p = payload as { tag?: string; value?: unknown };
-          if (p?.tag === 'v1') receivedThemes.push(String(p.value));
+          if (p?.tag === 'v1') receivedThemes.push(p.value);
         });
         return { unsubscribe() { sub.unsubscribe(); } };
       },
@@ -572,6 +573,17 @@ async function init() {
         try {
           await paymentManager.topUp(1000n, { type: 'productAccount', derivationIndex: 0 });
           const req = await paymentManager.requestPayment(500n, hexToU8a(destinationHex));
+          return { ok: true, paymentId: req.id };
+        } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // Same as paymentSmoke but targets an explicit purse on both legs (RFC-0017).
+      async paymentSmokeWithPurse(destinationHex: string, purse: number) {
+        try {
+          await paymentManager.topUp(1000n, { type: 'productAccount', derivationIndex: 0 }, purse);
+          const req = await paymentManager.requestPayment(500n, hexToU8a(destinationHex), purse);
           return { ok: true, paymentId: req.id };
         } catch (err) {
           return { ok: false, error: extractError(err) };

@@ -143,8 +143,29 @@ export interface PaymentLogEntry {
   source?: unknown;
   destination?: unknown;
   paymentId?: string;
+  /**
+   * Optional purse selector (RFC-0017). For `'top-up'` this is the `into` purse
+   * the funds were added to; for `'request'` it's the `from` purse the funds
+   * came out of. Undefined means the product targeted the main purse.
+   */
+  purse?: number;
   timestamp: number;
 }
+
+/**
+ * Host theme (host_theme_subscribe payload, upstream 0.8).
+ *
+ * `name` selects the active theme — `Default` for the host's built-in,
+ * `Custom` for a named host-specific theme. `variant` is the light/dark
+ * sub-mode (note the capitalization is `'Light' | 'Dark'`, upstream-aligned).
+ */
+export type Theme = {
+  name: { tag: 'Default'; value: undefined } | { tag: 'Custom'; value: string };
+  variant: 'Light' | 'Dark';
+};
+
+/** Shorthand inputs accepted by `setTheme` — `'light' | 'dark'` map to `{ name: Default, variant: Light/Dark }`. */
+export type ThemeInput = 'light' | 'dark' | Theme;
 
 /**
  * Controls how the test host responds to remote permission requests.
@@ -231,10 +252,21 @@ export interface TestHostAPI {
   clearStatements(): void;
 
   // ── Theme ──────────────────────────────────────────────────
-  /** Get the current theme. */
-  getTheme(): 'light' | 'dark';
-  /** Set the theme and notify subscribers. */
-  setTheme(theme: 'light' | 'dark'): void;
+  /**
+   * Get the current theme as the upstream struct
+   * (`{ name: { tag, value }, variant }`). Use `theme.variant` for the
+   * light/dark sub-mode (note the capitalization: `'Light' | 'Dark'`).
+   */
+  getTheme(): Theme;
+  /**
+   * Set the theme and notify subscribers.
+   *
+   * Accepts either a string shorthand (`'light' | 'dark'` — mapped to the
+   * host's `Default` theme with the matching variant) or the full
+   * `{ name, variant }` struct (e.g. to test product branches that read
+   * `theme.name`).
+   */
+  setTheme(theme: ThemeInput): void;
 
   // ── Login / auth ───────────────────────────────────────────
   /** Set how the host responds to login requests (RFC-0009). */

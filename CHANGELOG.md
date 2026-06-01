@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.0
+
+### Changed
+
+- **Upstream `@novasamatech/*` → `^0.8.0`** ([triangle-js-sdks#179](https://github.com/paritytech/triangle-js-sdks/pull/179)). v0.8 is **wire-incompatible** with v0.7 — a test host built on this release will only talk to products on `@novasamatech/host-api@^0.8.0`. Upgrade your product side in lockstep. Most products don't need code changes if they use `createPapiProvider` for chain access and `@novasamatech/product-react-renderer` for custom chat. The product-side breaking points are documented in [the v0.8 migration guide](https://github.com/paritytech/triangle-js-sdks/blob/release/0.8/docs/migration/v0.8.md): theme subscription struct, `OptionBool` encoding fix (signing + custom renderer), and a handful of variant renames.
+
+### Breaking changes
+
+- **Theme subscription** delivers the new `{ name, variant }` struct instead of a flat `'light' | 'dark'`. `setTheme('light' | 'dark')` keeps working as a shorthand (mapped to `{ name: { tag: 'Default', value: undefined }, variant: 'Light' | 'Dark' }`) and now also accepts the full struct so tests can drive custom-named themes (e.g. `setTheme({ name: { tag: 'Custom', value: 'midnight' }, variant: 'Dark' })`). `getTheme()` returns the struct — read `theme.variant` for the previous light/dark value.
+- **`AllocatableResource` variant rename**: `BulletInAllowance` → `BulletinAllowance`. Affects tests that hand-build resource-allocation requests.
+
+### Added
+
+- **`PaymentLogEntry.purse`** records the optional purse selector from RFC-0017 — `into` on top-ups, `from` on payment requests. Undefined means the product targeted the main purse.
+- **`Theme` and `ThemeInput` types** exported from the package root so tests can type their theme assertions.
+
+### Internal
+
+- New integration coverage: default + custom-theme struct round-trip, and a purse-selector assertion on the payment log.
+- Test product (`test/test-product.ts`) updated for the new theme payload shape and gained a `paymentSmokeWithPurse` helper.
+
 ## 0.8.6
 
 ### Fixed

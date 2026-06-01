@@ -1061,16 +1061,52 @@ test.describe('Theme', () => {
       });
       await page.waitForTimeout(100);
 
-      const themes = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedThemes());
+      const themes = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedThemes()) as Array<{ name: { tag: string; value?: string }; variant: 'Light' | 'Dark' }>;
       expect(themes.length).toBeGreaterThanOrEqual(1);
-      expect(themes[0]).toBe('light');
+      expect(themes[0]).toEqual({ name: { tag: 'Default', value: undefined }, variant: 'Light' });
 
-      // Host changes theme
+      // Host changes theme using the shorthand
       await page.evaluate(() => window.__TEST_HOST__.setTheme('dark'));
       await page.waitForTimeout(100);
 
-      const updated = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedThemes());
-      expect(updated).toContain('dark');
+      const updated = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedThemes()) as Array<{ name: { tag: string; value?: string }; variant: 'Light' | 'Dark' }>;
+      expect(updated.at(-1)).toEqual({ name: { tag: 'Default', value: undefined }, variant: 'Dark' });
+
+      await product.evaluate(() => (window as any).__themeSub.unsubscribe());
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('theme subscribe delivers a custom-named theme struct', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Drive a non-default theme from the host before the product subscribes.
+      await page.evaluate(() => window.__TEST_HOST__.setTheme({
+        name: { tag: 'Custom', value: 'midnight' },
+        variant: 'Dark',
+      }));
+
+      await product.evaluate(() => {
+        (window as any).__themeSub = window.__TEST_PRODUCT__.subscribeTheme();
+      });
+      await page.waitForTimeout(100);
+
+      const themes = await product.evaluate(() => window.__TEST_PRODUCT__.getReceivedThemes()) as Array<{ name: { tag: string; value?: string }; variant: 'Light' | 'Dark' }>;
+      expect(themes.at(-1)).toEqual({
+        name: { tag: 'Custom', value: 'midnight' },
+        variant: 'Dark',
+      });
+
+      // getTheme also returns the struct on the host side.
+      const current = await page.evaluate(() => window.__TEST_HOST__.getTheme());
+      expect(current).toEqual({ name: { tag: 'Custom', value: 'midnight' }, variant: 'Dark' });
 
       await product.evaluate(() => (window as any).__themeSub.unsubscribe());
     } finally {
@@ -1221,7 +1257,7 @@ test.describe('Resource allocation', () => {
       const result = await product.evaluate(() =>
         window.__TEST_PRODUCT__.requestResourceAllocation([
           { tag: 'StatementStoreAllowance', value: undefined },
-          { tag: 'BulletInAllowance', value: undefined },
+          { tag: 'BulletinAllowance', value: undefined },
           { tag: 'SmartContractAllowance', value: 0 },
           { tag: 'AutoSigning', value: undefined },
         ]));
@@ -1450,6 +1486,36 @@ test.describe('Payments', () => {
       expect(log[1].type).toBe('request');
       expect(log[1].amount).toBe(500n);
       expect(log[1].paymentId).toBe(result.paymentId);
+      // Default (no purse selector) → purse is undefined in the log.
+      expect(log[0].purse).toBeUndefined();
+      expect(log[1].purse).toBeUndefined();
+    } finally {
+      await host.close();
+    }
+  });
+
+  test('purse selector is recorded on top-up and request', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const dest = '0x' + 'bb'.repeat(32);
+      const result = await product.evaluate(
+        ({ d, p }: { d: string; p: number }) => window.__TEST_PRODUCT__.paymentSmokeWithPurse(d, p),
+        { d: dest, p: 7 },
+      );
+      expect(result.ok).toBe(true);
+
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPaymentLog());
+      expect(log).toHaveLength(2);
+      expect(log[0].type).toBe('top-up');
+      expect(log[0].purse).toBe(7);
+      expect(log[1].type).toBe('request');
+      expect(log[1].purse).toBe(7);
     } finally {
       await host.close();
     }

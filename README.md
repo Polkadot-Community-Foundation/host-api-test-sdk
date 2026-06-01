@@ -6,6 +6,8 @@
 
 Lightweight test host for E2E testing embedded Polkadot dapps that use the Spektr host-container protocol (`@novasamatech/host-container`).
 
+> **Upstream contract:** `0.9.x` tracks `@novasamatech/host-api`, `host-container`, and `host-api-wrapper` at `^0.8.0`. v0.8 is wire-incompatible with v0.7 — your product side must be on the same major as the test host.
+
 ## Why
 
 Products built with `@novasamatech/host-api-wrapper` (formerly `@novasamatech/product-sdk`) run inside an iframe and communicate with the host via `postMessage`. The SDK injects `window.injectedWeb3.spektr` only when it detects a real parent frame running `@novasamatech/host-container`.
@@ -267,6 +269,22 @@ createTestHostFixture({
 > ```
 >
 > Unmapped identities fall back to production-style derivation (`//Bob//dotnsId/index`). If `accounts: []` (unsigned host), unmapped `getProductAccount` / `getProductAccountAlias` calls return `err(RequestCredentialsErr.NotConnected)`, matching `polkadot-desktop`. Pre-mapped entries in `productAccounts` are still served.
+
+### Theme control
+
+The host delivers `host_theme_subscribe` as a `{ name, variant }` struct (upstream v0.8). `setTheme('light' | 'dark')` is a shorthand that maps to `{ name: { tag: 'Default', value: undefined }, variant: 'Light' | 'Dark' }`; pass the full struct to exercise custom-named theme branches:
+
+```ts
+await testHost.setTheme('dark'); // shorthand → Default / Dark
+await testHost.setTheme({
+  name: { tag: 'Custom', value: 'midnight' },
+  variant: 'Dark',
+});
+
+const theme = await testHost.getTheme();
+// theme.variant: 'Light' | 'Dark'
+// theme.name.tag: 'Default' | 'Custom'
+```
 
 ### Built-in chains
 
