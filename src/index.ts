@@ -28,4 +28,6 @@ export type {
   SigningLogEntry,
   TestHostAPI,
   TestHostServer,
+  Theme,
+  ThemeInput,
 } from './types.js';

@@ -1,7 +1,7 @@
 import type { Page, FrameLocator } from '@playwright/test';
 import { createTestHostServer } from '../server.js';
 import { DEFAULT_CHAIN } from '../chains.js';
-import type { ChatBot, ChatMessageLogEntry, ChatRoom, CreateTestHostOptions, DevAccountName, HexString, LoginBehavior, NavigationLogEntry, NotificationLogEntry, PaymentLogEntry, PermissionBehavior, PermissionLogEntry, PreimageEntry, SigningLogEntry, StatementSubmissionLogEntry, TestHostAPI } from '../types.js';
+import type { ChatBot, ChatMessageLogEntry, ChatRoom, CreateTestHostOptions, DevAccountName, HexString, LoginBehavior, NavigationLogEntry, NotificationLogEntry, PaymentLogEntry, PermissionBehavior, PermissionLogEntry, PreimageEntry, SigningLogEntry, StatementSubmissionLogEntry, TestHostAPI, Theme, ThemeInput } from '../types.js';
 
 export interface TestHost {
   /** The host page (contains the iframe) */
@@ -88,11 +88,19 @@ export interface TestHost {
   /** Clear all statements */
   clearStatements(): Promise<void>;
 
-  /** Get the current theme */
-  getTheme(): Promise<'light' | 'dark'>;
+  /**
+   * Get the current theme as the upstream struct (`{ name, variant }`).
+   * Use `theme.variant` for the light/dark sub-mode (`'Light' | 'Dark'`).
+   */
+  getTheme(): Promise<Theme>;
 
-  /** Set the theme and notify subscribers */
-  setTheme(theme: 'light' | 'dark'): Promise<void>;
+  /**
+   * Set the theme and notify subscribers.
+   *
+   * Accepts `'light' | 'dark'` (mapped to the host's `Default` theme with
+   * the matching variant) or the full `{ name, variant }` struct.
+   */
+  setTheme(theme: ThemeInput): Promise<void>;
 
   /** Set how the host responds to login requests */
   setLoginBehavior(behavior: LoginBehavior): Promise<void>;
@@ -269,7 +277,7 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
           return page.evaluate(() => window.__TEST_HOST__.getTheme());
         },
 
-        async setTheme(theme: 'light' | 'dark') {
+        async setTheme(theme: ThemeInput) {
           await page.evaluate((t) => window.__TEST_HOST__.setTheme(t), theme);
         },
 
