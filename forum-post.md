@@ -440,6 +440,21 @@ What the handler does now:
 
 ---
 
+# host-api-test-sdk 0.8.6
+
+One fix. Drop-in upgrade from `0.8.5`.
+
+## Fixed
+
+- **`PASEO_ASSET_HUB.genesisHash` refreshed after the Paseo Asset Hub chain reset.** The `paseo-asset-hub-next` chain was reset, so its genesis changed from `0x173cea…` to `0xbf0488dbe9daa1de1c08c5f743e26fdc2a4ecd74cf87dd1b4b1eeb99ae4ef19f`. The built-in `PASEO_ASSET_HUB` config carried the old hash, so the host's chain-feature handshake rejected any product descriptors regenerated against the new chain — the product app would sit `disconnected` in E2E even though the RPC was reachable. The new value is verified against the live chain via `chain_getBlockHash(0)`.
+
+## What you need to do
+
+- Upgrade to `0.8.6`. If you only use the built-in `PASEO_ASSET_HUB` config, no code changes are needed — the correct genesis comes with the upgrade.
+- If you hardcoded the old genesis (`0x173cea…`) in your own `ChainConfig` or test assertions, update it to `0xbf0488…`.
+
+---
+
 # host-api-test-sdk 0.8.5
 
 One fix. Drop-in upgrade from `0.8.4`. Thanks to [@BigTava](https://github.com/BigTava) for spotting this and contributing the initial fix.
