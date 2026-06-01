@@ -21,6 +21,12 @@
 - New integration coverage: default + custom-theme struct round-trip, and a purse-selector assertion on the payment log.
 - Test product (`test/test-product.ts`) updated for the new theme payload shape and gained a `paymentSmokeWithPurse` helper.
 
+## 0.8.6
+
+### Fixed
+
+- **`PASEO_ASSET_HUB.genesisHash` refreshed after the Paseo Asset Hub chain reset** ([#153](https://github.com/paritytech/product-sdk/pull/153)). The `paseo-asset-hub-next` chain was reset, changing its genesis from `0x173cea…` to `0xbf0488dbe9daa1de1c08c5f743e26fdc2a4ecd74cf87dd1b4b1eeb99ae4ef19f`. The stale literal caused the host's chain-feature handshake to reject product-sdk descriptors regenerated against the new chain, surfacing as the product app stuck `disconnected` in E2E (`expect byod-status: "connected"`, received `"disconnected"`). Verified the new value against the live chain via `chain_getBlockHash(0)`.
+
 ## 0.8.5
 
 ### Fixed
