@@ -46,6 +46,7 @@ import type {
   NavigationLogEntry,
   NotificationLogEntry,
   PaymentLogEntry,
+  PaymentTopUpBehavior,
   PermissionBehavior,
   PermissionLogEntry,
   PreimageEntry,
@@ -112,6 +113,7 @@ const submittedStatements: StatementSubmissionLogEntry[] = [];
 const statementSubscribers = new Set<{ filter: { tag: string; value: Uint8Array[] }; send: (s: any) => void }>();
 const paymentLog: PaymentLogEntry[] = [];
 let paymentBalance: bigint = 0n;
+let paymentTopUpBehavior: PaymentTopUpBehavior = "ok";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const paymentBalanceSubscribers = new Set<(balance: any) => void>();
 const paymentStatuses = new Map<string, { tag: string; value?: string }>();
@@ -328,6 +330,7 @@ function setupContainer(
   statementSubscribers.clear();
   paymentLog.length = 0;
   paymentBalance = 0n;
+  paymentTopUpBehavior = "ok";
   paymentBalanceSubscribers.clear();
   paymentStatuses.clear();
   paymentStatusSubscribers.clear();
@@ -1109,12 +1112,28 @@ function setupContainer(
       purse: params.into,
       timestamp: Date.now(),
     });
-    paymentBalance += params.amount;
-    // Notify balance subscribers
-    for (const sub of paymentBalanceSubscribers) {
-      sub({ available: paymentBalance });
+
+    const behavior = paymentTopUpBehavior;
+    const credit = (amount: bigint) => {
+      paymentBalance += amount;
+      for (const sub of paymentBalanceSubscribers) {
+        sub({ available: paymentBalance });
+      }
+    };
+
+    if (behavior === "ok") {
+      credit(params.amount);
+      return ok(undefined);
     }
-    return ok(undefined);
+    if (behavior.type === "partial") {
+      credit(behavior.credited);
+      return err(new PaymentTopUpErr.PartialPayment({ credited: behavior.credited }));
+    }
+    // behavior.type === 'reject'
+    if (behavior.reason === "InvalidSource") {
+      return err(new PaymentTopUpErr.InvalidSource());
+    }
+    return err(new PaymentTopUpErr.InsufficientFunds());
   });
 
   container.handlePaymentRequest((params, { ok, err }) => {
@@ -1429,6 +1448,10 @@ async function init(): Promise<void> {
 
     clearPaymentLog() {
       paymentLog.length = 0;
+    },
+
+    setPaymentTopUpBehavior(behavior: PaymentTopUpBehavior) {
+      paymentTopUpBehavior = behavior;
     },
 
     simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }) {

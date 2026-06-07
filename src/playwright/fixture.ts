@@ -1,7 +1,7 @@
 import type { Page, FrameLocator } from '@playwright/test';
 import { createTestHostServer } from '../server.js';
 import { DEFAULT_CHAIN } from '../chains.js';
-import type { ChatBot, ChatMessageLogEntry, ChatRoom, CreateTestHostOptions, DevAccountName, HexString, LoginBehavior, NavigationLogEntry, NotificationLogEntry, PaymentLogEntry, PermissionBehavior, PermissionLogEntry, PreimageEntry, SigningLogEntry, StatementSubmissionLogEntry, TestHostAPI, Theme, ThemeInput } from '../types.js';
+import type { ChatBot, ChatMessageLogEntry, ChatRoom, CreateTestHostOptions, DevAccountName, HexString, LoginBehavior, NavigationLogEntry, NotificationLogEntry, PaymentLogEntry, PaymentTopUpBehavior, PermissionBehavior, PermissionLogEntry, PreimageEntry, SigningLogEntry, StatementSubmissionLogEntry, TestHostAPI, Theme, ThemeInput } from '../types.js';
 
 export interface TestHost {
   /** The host page (contains the iframe) */
@@ -122,6 +122,14 @@ export interface TestHost {
 
   /** Clear the payment log */
   clearPaymentLog(): Promise<void>;
+
+  /**
+   * Set how the host responds to `paymentTopUp` (default `'ok'`). Use
+   * `{ type: 'partial', credited }` to drive products through the RFC-0021
+   * `PartialPayment` error path; the balance is bumped by `credited` and the
+   * call rejects with `PaymentTopUpErr.PartialPayment({ credited })`.
+   */
+  setPaymentTopUpBehavior(behavior: PaymentTopUpBehavior): Promise<void>;
 
   /** Manually set a payment's status and notify subscribers */
   simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }): Promise<void>;
@@ -308,6 +316,21 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
 
         async clearPaymentLog() {
           await page.evaluate(() => window.__TEST_HOST__.clearPaymentLog());
+        },
+
+        async setPaymentTopUpBehavior(behavior: PaymentTopUpBehavior) {
+          // BigInt isn't structured-cloneable across page.evaluate; serialize partial.credited.
+          const wire =
+            typeof behavior === 'string' || behavior.type !== 'partial'
+              ? behavior
+              : { type: 'partial' as const, credited: behavior.credited.toString() };
+          await page.evaluate((b) => {
+            const hydrated =
+              typeof b === 'string' || b.type !== 'partial'
+                ? b
+                : { type: 'partial' as const, credited: BigInt(b.credited) };
+            window.__TEST_HOST__.setPaymentTopUpBehavior(hydrated);
+          }, wire);
         },
 
         async simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }) {

@@ -183,6 +183,20 @@ export type PermissionBehavior = 'approve-all' | 'reject-all' | ((tag: string, v
  */
 export type LoginBehavior = 'success' | 'reject' | ((reason: string | undefined) => boolean);
 
+/**
+ * Controls how the test host responds to `paymentTopUp` requests (RFC-0006 / RFC-0021).
+ * - `'ok'` — credit the full amount and return success (default)
+ * - `{ type: 'partial'; credited }` — credit only `credited` and reject with
+ *   `PaymentTopUpErr.PartialPayment({ credited })`. Mirrors real-host behavior
+ *   when only some coins in a `Coins` top-up could be claimed.
+ * - `{ type: 'reject'; reason }` — credit nothing and reject with the chosen
+ *   `PaymentTopUpErr` variant.
+ */
+export type PaymentTopUpBehavior =
+  | 'ok'
+  | { type: 'partial'; credited: bigint }
+  | { type: 'reject'; reason: 'InvalidSource' | 'InsufficientFunds' };
+
 /** Shape of window.__TEST_HOST__ — shared between browser bundle and Playwright fixture. */
 export interface TestHostAPI {
   switchAccount(name: string): Promise<void>;
@@ -285,6 +299,15 @@ export interface TestHostAPI {
   getPaymentLog(): PaymentLogEntry[];
   /** Clear the payment log. */
   clearPaymentLog(): void;
+  /**
+   * Set how the test host responds to `paymentTopUp`. The default is `'ok'`
+   * (credit full amount, return success). Use `{ type: 'partial', credited }`
+   * to drive products through the RFC-0021 `PartialPayment` error path —
+   * the balance is bumped by `credited` and the call rejects with
+   * `PaymentTopUpErr.PartialPayment({ credited })`. The `paymentLog` entry
+   * always records the attempted `amount` and `source`, regardless of outcome.
+   */
+  setPaymentTopUpBehavior(behavior: PaymentTopUpBehavior): void;
   /** Manually set a payment's status and notify subscribers. */
   simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }): void;
 

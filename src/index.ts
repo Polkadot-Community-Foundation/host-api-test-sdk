@@ -21,6 +21,7 @@ export type {
   NavigationLogEntry,
   NotificationLogEntry,
   PaymentLogEntry,
+  PaymentTopUpBehavior,
   PreimageEntry,
   StatementSubmissionLogEntry,
   PermissionBehavior,
