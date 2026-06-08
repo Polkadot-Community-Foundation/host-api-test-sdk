@@ -77,6 +77,7 @@ declare global {
       createTransactionLegacy(publicKeyHex: string): Promise<TestResult>;
       paymentSmoke(destinationHex: string): Promise<TestResult>;
       paymentSmokeWithPurse(destinationHex: string, purse: number): Promise<TestResult>;
+      paymentTopUpCoins(amount: string, keysHex: string[]): Promise<TestResult & { credited?: string }>;
       statementCreateProofAuthorized(dataHex: string): Promise<TestResult>;
       signRawProduct(dotnsId: string, index: number, payloadHex: string): Promise<TestResult>;
       subscribeBalance(): { unsubscribe(): void };
@@ -586,6 +587,23 @@ async function init() {
           const req = await paymentManager.requestPayment(500n, hexToU8a(destinationHex), purse);
           return { ok: true, paymentId: req.id };
         } catch (err) {
+          return { ok: false, error: extractError(err) };
+        }
+      },
+
+      // RFC-0021 coins top-up. amount/keysHex stringified for postMessage.
+      // On PartialPayment, returns ok:false and the credited amount so tests can assert it.
+      async paymentTopUpCoins(amount: string, keysHex: string[]) {
+        try {
+          const keys = keysHex.map((k) => hexToU8a(k));
+          await paymentManager.topUp(BigInt(amount), { type: 'coins', keys });
+          return { ok: true };
+        } catch (err) {
+          const payload = (err as { payload?: { credited?: bigint } })?.payload;
+          if (payload && typeof payload.credited === 'bigint') {
+            // Skip extractError: the payload carries a BigInt that JSON.stringify can't serialize.
+            return { ok: false, error: 'PartialPayment', credited: payload.credited.toString() };
+          }
           return { ok: false, error: extractError(err) };
         }
       },

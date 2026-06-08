@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.1
+
+### Changed
+
+- **Upstream `@novasamatech/*` → `^0.8.6`**. Pulls in RFC-0021 coin top-ups ([triangle-js-sdks#194](https://github.com/paritytech/triangle-js-sdks/pull/194)), the `PaymentTopUpSource` codec fix ([#198](https://github.com/paritytech/triangle-js-sdks/pull/198) — `PrivateKey`/`Coins` keys are now 64-byte sr25519 secrets, not 32-byte ed25519), the `deriveProductEntropyFromSource` export for RFC-0007 Option 1 hosts ([#205](https://github.com/paritytech/triangle-js-sdks/pull/205)), and host-chat / host-papp internals. All existing handlers (theme, payments, signing, statement-store) continue to work without code changes.
+
+### Added
+
+- **`PaymentTopUpSource.Coins(Vector<Sr25519SecretKey>)` flows through to `paymentLog.source`.** `handlePaymentTopUp` already forwarded `params.source` as-is, so the new variant lands in the log entry as `{ tag: 'Coins', value: Uint8Array[] }`. Each key in the vector is 64 bytes after the upstream codec fix.
+- **`setPaymentTopUpBehavior(behavior)` test control** for driving products through the RFC-0021 `PartialPayment` error path. Behavior is `'ok'` (default), `{ type: 'partial', credited }` (credit `credited` and reject with `PaymentTopUpErr.PartialPayment({ credited })`, mirroring how a real host reports that only some coins could be claimed), or `{ type: 'reject', reason: 'InvalidSource' | 'InsufficientFunds' }`. The `paymentLog` entry always records the attempted `amount` and `source` regardless of outcome.
+- **`PaymentTopUpBehavior` type exported** from the package root so tests can type the argument.
+
+### Internal
+
+- Integration tests for the coins round-trip and the partial-payment behavior. The partial-payment test asserts both the rejected promise's `payload.credited` and that the balance was bumped by exactly that amount.
+- Test product gained `paymentTopUpCoins(amount, keysHex[])` helper.
+
 ## 0.9.0
 
 ### Changed

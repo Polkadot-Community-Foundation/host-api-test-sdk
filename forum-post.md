@@ -1,56 +1,3 @@
-# host-api-test-sdk 0.9.0
-
-Tracks upstream `@novasamatech/*@^0.8.0` ([triangle-js-sdks#179](https://github.com/paritytech/triangle-js-sdks/pull/179)). v0.8 is **wire-incompatible** with v0.7 — there is no compatibility shim, so your product side must be on `@novasamatech/host-api@^0.8.0` too. The [v0.8 migration guide](https://github.com/paritytech/triangle-js-sdks/blob/release/0.8/docs/migration/v0.8.md) lists all the product-side touchpoints; most products that use `createPapiProvider` for chain access and `@novasamatech/product-react-renderer` for custom chat don't need code changes.
-
-## What changed on our side
-
-### Theme subscription is a struct now
-
-The host now delivers a `Theme` struct on `host_theme_subscribe` instead of the flat `'light' | 'dark'` enum:
-
-```ts
-type Theme = {
-  name: { tag: 'Default'; value: undefined } | { tag: 'Custom'; value: string };
-  variant: 'Light' | 'Dark';
-};
-```
-
-`setTheme('light' | 'dark')` keeps working as a shorthand — it maps to `{ name: { tag: 'Default', value: undefined }, variant: 'Light' | 'Dark' }`. New: you can pass the full struct to test product branches that read `theme.name`:
-
-```ts
-await testHost.setTheme({
-  name: { tag: 'Custom', value: 'midnight' },
-  variant: 'Dark',
-});
-```
-
-`getTheme()` returns the struct — use `theme.variant` where you previously had `'light'/'dark'`.
-
-### Payment log records the purse selector
-
-Upstream v0.8 added an optional purse selector to `topUp` (`into`) and `requestPayment` (`from`) per RFC-0017. The test host now surfaces the selector on `PaymentLogEntry.purse`:
-
-```ts
-await testHost.getPaymentLog();
-// → [{ type: 'top-up', amount: 1000n, purse: 7, ... },
-//    { type: 'request', amount: 500n, purse: 7, ... }]
-```
-
-Calls that omit the selector still target the main purse and the log entry's `purse` is `undefined`.
-
-### Variant rename: `BulletInAllowance` → `BulletinAllowance`
-
-If you hand-build resource-allocation requests in a test, rename the tag. Products going through the wrapper need no change.
-
-## What you need to do
-
-1. Upgrade to `0.9.0` and bump your product's `@novasamatech/host-api` (and related) to `^0.8.0` at the same time.
-2. If you call `subscribeTheme(cb)` in your product or `getTheme()` in tests, switch to reading `theme.variant` (note the capitalization: `'Light' | 'Dark'`). Or branch on `theme.name.tag === 'Custom'` if you support custom themes.
-3. Grep tests for `BulletInAllowance` and rename to `BulletinAllowance`.
-4. Re-verify any custom signing flows (`withSignedTransaction`) and custom chat renderers — the upstream `OptionBool` encoding fix flips `true`/`false` against older peers. The test SDK rides through the upstream fix transparently; you should not need to change code, just re-run your suite.
-
----
-
 # host-api-test-sdk 0.4.0
 
 ## Product account mapping
@@ -554,3 +501,101 @@ Two fixes addressing developer-reported issues. Drop-in upgrade from `0.8.3`.
 
 ---
 
+# host-api-test-sdk 0.9.0
+
+Tracks upstream `@novasamatech/*@^0.8.0` ([triangle-js-sdks#179](https://github.com/paritytech/triangle-js-sdks/pull/179)). v0.8 is **wire-incompatible** with v0.7 — there is no compatibility shim, so your product side must be on `@novasamatech/host-api@^0.8.0` too. The [v0.8 migration guide](https://github.com/paritytech/triangle-js-sdks/blob/release/0.8/docs/migration/v0.8.md) lists all the product-side touchpoints; most products that use `createPapiProvider` for chain access and `@novasamatech/product-react-renderer` for custom chat don't need code changes.
+
+## What changed on our side
+
+### Theme subscription is a struct now
+
+The host now delivers a `Theme` struct on `host_theme_subscribe` instead of the flat `'light' | 'dark'` enum:
+
+```ts
+type Theme = {
+  name: { tag: 'Default'; value: undefined } | { tag: 'Custom'; value: string };
+  variant: 'Light' | 'Dark';
+};
+```
+
+`setTheme('light' | 'dark')` keeps working as a shorthand — it maps to `{ name: { tag: 'Default', value: undefined }, variant: 'Light' | 'Dark' }`. New: you can pass the full struct to test product branches that read `theme.name`:
+
+```ts
+await testHost.setTheme({
+  name: { tag: 'Custom', value: 'midnight' },
+  variant: 'Dark',
+});
+```
+
+`getTheme()` returns the struct — use `theme.variant` where you previously had `'light'/'dark'`.
+
+### Payment log records the purse selector
+
+Upstream v0.8 added an optional purse selector to `topUp` (`into`) and `requestPayment` (`from`) per RFC-0017. The test host now surfaces the selector on `PaymentLogEntry.purse`:
+
+```ts
+await testHost.getPaymentLog();
+// → [{ type: 'top-up', amount: 1000n, purse: 7, ... },
+//    { type: 'request', amount: 500n, purse: 7, ... }]
+```
+
+Calls that omit the selector still target the main purse and the log entry's `purse` is `undefined`.
+
+### Variant rename: `BulletInAllowance` → `BulletinAllowance`
+
+If you hand-build resource-allocation requests in a test, rename the tag. Products going through the wrapper need no change.
+
+## What you need to do
+
+1. Upgrade to `0.9.0` and bump your product's `@novasamatech/host-api` (and related) to `^0.8.0` at the same time.
+2. If you call `subscribeTheme(cb)` in your product or `getTheme()` in tests, switch to reading `theme.variant` (note the capitalization: `'Light' | 'Dark'`). Or branch on `theme.name.tag === 'Custom'` if you support custom themes.
+3. Grep tests for `BulletInAllowance` and rename to `BulletinAllowance`.
+4. Re-verify any custom signing flows (`withSignedTransaction`) and custom chat renderers — the upstream `OptionBool` encoding fix flips `true`/`false` against older peers. The test SDK rides through the upstream fix transparently; you should not need to change code, just re-run your suite.
+
+---
+
+# host-api-test-sdk 0.9.1
+
+Tracks upstream `@novasamatech/*@^0.8.6`. Drop-in upgrade from `0.9.0` for existing tests — nothing renames, nothing moves. What's new is an extra error path you can now drive: RFC-0021 partial coin top-ups.
+
+## What changed on our side
+
+### RFC-0021 coin top-ups land in the payment log
+
+Upstream `0.8.3` added a third `PaymentTopUpSource` variant, `Coins`, alongside `ProductAccount` and `PrivateKey`. A product calling `paymentManager.topUp(amount, { type: 'coins', keys: [...] })` skips the on-chain round-trip and credits a balance directly from raw sr25519 coin secret keys.
+
+`handlePaymentTopUp` already forwarded the source verbatim to the log, so the new variant lands in `paymentLog[i].source` as:
+
+```ts
+{ tag: 'Coins', value: [Uint8Array(64), Uint8Array(64), ...] }
+```
+
+`0.8.4` then fixed the codec — keys are now 64-byte sr25519 secrets, not the 32-byte ed25519 keys briefly shipped in `0.8.3`. If you write tests that pass `privateKey` or `coins` sources by hand, allocate 64-byte buffers (e.g. `new Uint8Array(64).fill(...)`).
+
+### `setPaymentTopUpBehavior` for partial-credit and reject paths
+
+RFC-0021 introduced `PaymentTopUpErr.PartialPayment({ credited })` — a real host returns it when only some of the submitted coins could be claimed, and the product needs to reconcile the actual `credited` amount against what it asked for. The new `setPaymentTopUpBehavior` test control drives the host into that error path:
+
+```ts
+// Default: full credit + ok(undefined)
+await testHost.setPaymentTopUpBehavior('ok');
+
+// Credit only `credited` and reject with PartialPayment({ credited })
+await testHost.setPaymentTopUpBehavior({ type: 'partial', credited: 200n });
+
+// Credit nothing and reject
+await testHost.setPaymentTopUpBehavior({ type: 'reject', reason: 'InvalidSource' });
+await testHost.setPaymentTopUpBehavior({ type: 'reject', reason: 'InsufficientFunds' });
+```
+
+The balance subscription receives the partial credit before the promise rejects, so a product UI that subscribes to `paymentManager.subscribeBalance` will see the same sequence it would in production. `paymentLog` always records the attempted `amount` and `source` regardless of outcome — what changes is what `paymentManager.topUp(...)` resolves to.
+
+`PaymentTopUpBehavior` is exported from the package root for typing.
+
+## What you need to do
+
+1. Upgrade to `0.9.1`. Bump your product's `@novasamatech/host-api` (and friends) to `^0.8.6` at the same time — wire-compatible with `0.8.3+` but matched-version is the safest.
+2. No code changes required for existing tests. Theme, payments, signing, statement-store, and chat handlers behave identically.
+3. If you want to exercise the partial-payment branch of your product, drop `await testHost.setPaymentTopUpBehavior({ type: 'partial', credited: ... })` before the call.
+
+---

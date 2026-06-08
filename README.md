@@ -270,6 +270,28 @@ createTestHostFixture({
 >
 > Unmapped identities fall back to production-style derivation (`//Bob//dotnsId/index`). If `accounts: []` (unsigned host), unmapped `getProductAccount` / `getProductAccountAlias` calls return `err(RequestCredentialsErr.NotConnected)`, matching `polkadot-desktop`. Pre-mapped entries in `productAccounts` are still served.
 
+### Payment control
+
+The host implements RFC-0006 (balance / topUp / requestPayment / status) and accepts the RFC-0021 `Coins` top-up variant. Every `paymentTopUp` call is recorded in `getPaymentLog()` with the attempted `amount`, `source`, and optional `purse` selector, regardless of outcome.
+
+`setPaymentTopUpBehavior(...)` drives the host into the partial-credit or reject error paths so tests can cover them:
+
+```ts
+// Default — credit full amount, resolve with ok(undefined).
+await testHost.setPaymentTopUpBehavior('ok');
+
+// Credit `credited` and reject with PaymentTopUpErr.PartialPayment({ credited }).
+// The balance subscription receives the partial credit before the promise rejects,
+// matching how real hosts report a partially-fulfilled `Coins` top-up.
+await testHost.setPaymentTopUpBehavior({ type: 'partial', credited: 200n });
+
+// Credit nothing and reject.
+await testHost.setPaymentTopUpBehavior({ type: 'reject', reason: 'InvalidSource' });
+await testHost.setPaymentTopUpBehavior({ type: 'reject', reason: 'InsufficientFunds' });
+```
+
+Other payment helpers: `setPaymentBalance(amount)`, `getPaymentLog()`, `clearPaymentLog()`, `simulatePaymentStatus(paymentId, status)`.
+
 ### Theme control
 
 The host delivers `host_theme_subscribe` as a `{ name, variant }` struct (upstream v0.8). `setTheme('light' | 'dark')` is a shorthand that maps to `{ name: { tag: 'Default', value: undefined }, variant: 'Light' | 'Dark' }`; pass the full struct to exercise custom-named theme branches:

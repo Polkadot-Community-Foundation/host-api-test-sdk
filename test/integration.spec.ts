@@ -1520,6 +1520,86 @@ test.describe('Payments', () => {
       await host.close();
     }
   });
+
+  // RFC-0021 coins top-up source. `keys` must be 64-byte sr25519 secret keys
+  // (codec changed from 32-byte ed25519 in upstream 0.8.4).
+  test('coins top-up source round-trips through paymentLog', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      const k1 = '0x' + '11'.repeat(64);
+      const k2 = '0x' + '22'.repeat(64);
+      const result = await product.evaluate(
+        ({ amount, keys }: { amount: string; keys: string[] }) =>
+          window.__TEST_PRODUCT__.paymentTopUpCoins(amount, keys),
+        { amount: '750', keys: [k1, k2] },
+      );
+      expect(result.ok).toBe(true);
+
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPaymentLog());
+      expect(log).toHaveLength(1);
+      expect(log[0].type).toBe('top-up');
+      expect(log[0].amount).toBe(750n);
+      const source = log[0].source as { tag: string; value: Uint8Array[] };
+      expect(source.tag).toBe('Coins');
+      expect(source.value).toHaveLength(2);
+      expect(source.value[0]).toHaveLength(64);
+      expect(source.value[1]).toHaveLength(64);
+    } finally {
+      await host.close();
+    }
+  });
+
+  // RFC-0021 PartialPayment error path. The host credits `credited` and rejects
+  // with PaymentTopUpErr.PartialPayment({ credited }) so the product can reconcile.
+  test('PartialPayment behavior credits partially and rejects with credited amount', async ({ page }) => {
+    const host = await createTestHostServer({
+      productUrl: productServer.url,
+      accounts: ['alice'],
+    });
+
+    try {
+      const product = await loadHostAndProduct(page, host.url, productServer.url);
+
+      // Drive the host into partial-credit mode for the next topUp.
+      await page.evaluate(() => {
+        window.__TEST_HOST__.setPaymentTopUpBehavior({ type: 'partial', credited: 200n });
+      });
+
+      const k1 = '0x' + 'ab'.repeat(64);
+      const k2 = '0x' + 'cd'.repeat(64);
+      const result = await product.evaluate(
+        ({ amount, keys }: { amount: string; keys: string[] }) =>
+          window.__TEST_PRODUCT__.paymentTopUpCoins(amount, keys),
+        { amount: '1000', keys: [k1, k2] },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.credited).toBe('200');
+
+      // The attempted top-up is still recorded with the requested amount...
+      const log = await page.evaluate(() => window.__TEST_HOST__.getPaymentLog());
+      expect(log).toHaveLength(1);
+      expect(log[0].amount).toBe(1000n);
+      // ...but only `credited` actually landed in the balance.
+      const balances = await product.evaluate(() => {
+        const sub = window.__TEST_PRODUCT__.subscribeBalance();
+        return new Promise<string[]>((resolve) => {
+          setTimeout(() => {
+            sub.unsubscribe();
+            resolve(window.__TEST_PRODUCT__.getReceivedBalances());
+          }, 100);
+        });
+      });
+      expect(balances).toContain('200');
+    } finally {
+      await host.close();
+    }
+  });
 });
 
 // ── Sign raw (product account) ────────────────────────────────────
