@@ -5,3 +5,13 @@ dist/
 test/test-product-bundle.js
 test/test-results/
 test-results/
+
+# Secrets — block bare .env and per-environment overrides, allow .env.example
+.env
+.env.*
+!.env.example
+
+# Local-only collaborator/agent files (not part of the public repo)
+AGENTS.md
+consumers.md
+scripts/
