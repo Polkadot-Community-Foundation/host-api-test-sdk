@@ -4,6 +4,9 @@
 [![npm](https://img.shields.io/npm/v/@parity/host-api-test-sdk)](https://www.npmjs.com/package/@parity/host-api-test-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
+> [!WARNING]
+> The following is a prototype, reference implementation, and proof-of-concept. This open source code is provided for research, experimentation, and developer education only. This code has not been audited, is actively experimental, and may contain bugs, vulnerabilities, or incomplete features. Use at your own risk.
+
 Lightweight test host for E2E testing embedded Polkadot dapps that use the Spektr host-container protocol (`@novasamatech/host-container`).
 
 > **Upstream contract:** `0.9.x` tracks `@novasamatech/host-api`, `host-container`, and `host-api-wrapper` at `^0.8.0`. v0.8 is wire-incompatible with v0.7 — your product side must be on the same major as the test host.
@@ -388,6 +391,17 @@ The env file utilities (`loadChainFromEnv`, `parseEnvFile`, `loadEnvFiles`) have
 ```
 
 If you only used built-in chains (`PASEO_ASSET_HUB`, etc.) and `createTestHostFixture` — no changes needed.
+
+## Security
+
+Before deploying it for real use cases, you are responsible for:
+
+- Reviewing the code yourself, we publish a reference, not a hardened production build
+- Checking that the dependencies are up to date and free of known vulnerabilities
+- Securing your own fork or deployment environment (keys, secrets, network configuration)
+- Tracking the latest tagged release/commits for security fixes; older releases are not backported (exceptions might apply)
+
+For Parity's security disclosure process, and Bug Bounty program, feel free to visit: https://parity.io/bug-bounty
 
 ## License
 
