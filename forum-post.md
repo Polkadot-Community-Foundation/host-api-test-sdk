@@ -554,6 +554,26 @@ If you hand-build resource-allocation requests in a test, rename the tag. Produc
 
 ---
 
+# host-api-test-sdk 0.9.2
+
+Tracks upstream `@novasamatech/*@^0.8.8`. Pure version bump — no API changes, no test changes, no breaking changes. Existing `0.9.1` tests continue to work without modification.
+
+## What changed upstream
+
+- **`0.8.7`**: statement-store rework on the SSO peer side — concurrent request tracking, transient-failure retry/backoff, statement priority counted from a spec epoch (so TS-written statements no longer outrank iOS/Android ones), `ExpiryTooLow` / `AccountFull` absorbed once a submission is superseded. Also bumps `polkadot-api` to `2.1.6` (double-notification fix) and ships `LICENSE` + `THIRD_PARTY_NOTICES` in every package.
+- **`0.8.8`**: SSO `UserSession` gains `signRawLegacy` and `createTransactionLegacy` for legacy `AccountId`-based sign requests routed through a paired authorising device.
+
+## Why no SDK-side changes
+
+Both releases land in `host-papp` (the SSO peer / authorising-device path). This test SDK simulates the in-process host that products call directly via `host-container` + `host-api` + `host-api-wrapper`, and the public surface of those three packages is byte-identical to `0.8.6`. No new handlers to write, no codecs to register.
+
+## What you need to do
+
+1. Upgrade to `0.9.2`. Bump your product's `@novasamatech/host-api` (and friends) to `^0.8.8` at the same time — matched versions stay the safest pairing.
+2. Nothing else.
+
+---
+
 # host-api-test-sdk 0.9.1
 
 Tracks upstream `@novasamatech/*@^0.8.6`. Drop-in upgrade from `0.9.0` for existing tests — nothing renames, nothing moves. What's new is an extra error path you can now drive: RFC-0021 partial coin top-ups.

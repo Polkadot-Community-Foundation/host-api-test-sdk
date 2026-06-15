@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.2
+
+### Changed
+
+- **Upstream `@novasamatech/*` → `^0.8.8`**. Tracks 0.8.7 ([triangle-js-sdks release/0.8.7](https://github.com/paritytech/triangle-js-sdks/pull/216)) and 0.8.8 ([release/0.8.8](https://github.com/paritytech/triangle-js-sdks/pull/219)). The diff against 0.8.6 in `host-api`, `host-container`, and `host-api-wrapper` is LICENSE files and version bumps only — no source changes. The 0.8.7 statement-store rework (priority epoch, expiry retries, AccountFull handling) and the 0.8.8 legacy sign requests both live in `host-papp` (the SSO peer / authorising-device path), which this SDK does not simulate. No handler surface changes; no test changes beyond re-running the suite.
+
 ## 0.9.1
 
 ### Changed
