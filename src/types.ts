@@ -2,7 +2,7 @@ import type { HexString } from '@novasamatech/host-api';
 
 export type { HexString } from '@novasamatech/host-api';
 
-export interface ChainConfig {
+export interface NetworkConfig {
   id: string;
   name: string;
   genesisHash: HexString;
@@ -43,8 +43,10 @@ export interface CreateTestHostOptions {
   productUrl: string;
   /** Accounts to provide (used for getLegacyAccounts and signing) */
   accounts?: Account[];
-  /** Chain config (default: PASEO_ASSET_HUB) */
-  chain?: ChainConfig;
+  /**
+   * Networks the host can route, matched by genesis hash.
+   */
+  networks?: NetworkConfig[];
   /** Port to listen on (default: 0 = random available port) */
   port?: number;
   /**
@@ -265,7 +267,6 @@ export interface TestHostAPI {
   /** Clear the submitted-statements log and any seeded statements. */
   clearStatements(): void;
 
-  // ── Theme ──────────────────────────────────────────────────
   /**
    * Get the current theme as the upstream struct
    * (`{ name: { tag, value }, variant }`). Use `theme.variant` for the
@@ -282,7 +283,6 @@ export interface TestHostAPI {
    */
   setTheme(theme: ThemeInput): void;
 
-  // ── Login / auth ───────────────────────────────────────────
   /** Set how the host responds to login requests (RFC-0009). */
   setLoginBehavior(behavior: LoginBehavior): void;
   /** Whether the product is currently authenticated. */
@@ -292,7 +292,6 @@ export interface TestHostAPI {
   /** Simulate user reconnect (authenticated state). */
   simulateReconnect(): void;
 
-  // ── Payments ───────────────────────────────────────────────
   /** Set the mock payment balance (in smallest unit). */
   setPaymentBalance(amount: bigint): void;
   /** Get the log of payment operations (top-ups, requests). */

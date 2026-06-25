@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEV_ACCOUNTS } from './accounts.js';
-import type { Account, ChainConfig } from './types.js';
+import type { Account, NetworkConfig } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -18,7 +18,7 @@ function getBundleScript(): string {
 interface HostPageConfig {
   productUrl: string;
   accounts: Account[];
-  chain: ChainConfig;
+  networks: NetworkConfig[];
   productAccounts?: Record<string, Account>;
 }
 
@@ -31,7 +31,7 @@ function resolveAccount(entry: Account): { name: string; uri: string } {
 }
 
 export function generateHostPage(config: HostPageConfig): string {
-  const { productUrl, accounts, chain } = config;
+  const { productUrl, accounts, networks } = config;
 
   const accountConfigs = accounts.map(resolveAccount);
 
@@ -47,11 +47,11 @@ export function generateHostPage(config: HostPageConfig): string {
   const configJson = JSON.stringify({
     productUrl,
     accounts: accountConfigs,
-    chain: {
-      genesisHash: chain.genesisHash,
-      rpcUrl: chain.rpcUrl,
-      name: chain.name,
-    },
+    networks: networks.map((n) => ({
+      genesisHash: n.genesisHash,
+      rpcUrl: n.rpcUrl,
+      name: n.name,
+    })),
     ...(productAccountConfigs && { productAccounts: productAccountConfigs }),
   });
 
