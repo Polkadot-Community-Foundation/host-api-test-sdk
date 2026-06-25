@@ -619,3 +619,52 @@ The balance subscription receives the partial credit before the promise rejects,
 3. If you want to exercise the partial-payment branch of your product, drop `await testHost.setPaymentTopUpBehavior({ type: 'partial', credited: ... })` before the call.
 
 ---
+
+# host-api-test-sdk 0.10.0
+
+The single `chain` option becomes a `networks` array, and the host now routes a product's connection requests to whichever configured network matches the requested genesis hash. This lets one test host serve a product that talks to more than one chain in the same session — for example an Asset Hub plus the People network.
+
+## What changed on our side
+
+### `chain` → `networks` (breaking)
+
+`createTestHostServer` and `createTestHostFixture` no longer take a single `chain`. They take a `networks` array instead. The first entry is the default, and each connection request is matched to a network by genesis hash. Wrap your existing value to migrate:
+
+```diff
+ createTestHostFixture({
+   productUrl: "http://localhost:3000",
+   accounts: ["alice"],
+-  chain: PASEO_ASSET_HUB,
++  networks: [PASEO_ASSET_HUB],
+ });
+```
+
+To serve more than one network, list them all — order only decides the default:
+
+```ts
+createTestHostFixture({
+  productUrl: "http://localhost:3000",
+  accounts: ["alice"],
+  networks: [PASEO_ASSET_HUB, PREVIEWNET, PREVIEWNET_ASSET_HUB],
+});
+```
+
+A product that switches genesis mid-session now connects to the matching RPC instead of being rejected. Requests for a genesis hash you didn't configure are reported as `Unsupported chain requested`, listing the genesis hashes the host can route.
+
+### `ChainConfig` → `NetworkConfig` (breaking)
+
+The config type is renamed. The shape is identical (`id`, `name`, `genesisHash`, `rpcUrl`, `tokenSymbol`, `tokenDecimals`) — only the name changed, so update your type imports:
+
+```diff
+-import type { ChainConfig } from "@parity/host-api-test-sdk";
++import type { NetworkConfig } from "@parity/host-api-test-sdk";
+```
+
+## What you need to do
+
+1. Upgrade to `0.10.0`.
+2. Rename `chain: X` to `networks: [X]` in your `createTestHostServer` / `createTestHostFixture` calls.
+3. Rename any `ChainConfig` type imports to `NetworkConfig`.
+4. Optionally, add the extra networks your product connects to so mid-session chain switches resolve.
+
+---

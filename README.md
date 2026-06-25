@@ -49,7 +49,7 @@ import {
 const { testHost } = createTestHostFixture({
   productUrl: "http://localhost:3000",
   accounts: ["alice"],
-  chain: PASEO_ASSET_HUB,
+  networks: [PASEO_ASSET_HUB],
 });
 
 export const test = base.extend({ testHost });
@@ -101,26 +101,26 @@ console.log("Open in browser:", server.url);
 await server.close();
 ```
 
-## Custom chain config
+## Custom network config
 
-For public testnets, use the built-in chain configs:
+The host routes each connection request to the matching network by genesis hash, and the first entry is the default. For public testnets, use the built-in network configs:
 
 ```ts
 import { PASEO_ASSET_HUB, PREVIEWNET } from "@parity/host-api-test-sdk";
 
 const server = await createTestHostServer({
   productUrl: "http://localhost:3000",
-  chain: PASEO_ASSET_HUB,
+  networks: [PASEO_ASSET_HUB, PREVIEWNET],
 });
 ```
 
-For local networks where the genesis hash changes on each restart, construct a `ChainConfig` directly:
+For local networks where the genesis hash changes on each restart, construct a `NetworkConfig` directly:
 
 ```ts
 import { createTestHostServer } from "@parity/host-api-test-sdk";
-import type { ChainConfig } from "@parity/host-api-test-sdk";
+import type { NetworkConfig } from "@parity/host-api-test-sdk";
 
-const chain: ChainConfig = {
+const network: NetworkConfig = {
   id: "local-asset-hub",
   name: "Local Asset Hub",
   genesisHash: process.env.GENESIS_HASH as `0x${string}`,
@@ -131,7 +131,7 @@ const chain: ChainConfig = {
 
 const server = await createTestHostServer({
   productUrl: "http://localhost:3000",
-  chain,
+  networks: [network],
 });
 ```
 
@@ -311,9 +311,9 @@ const theme = await testHost.getTheme();
 // theme.name.tag: 'Default' | 'Custom'
 ```
 
-### Built-in chains
+### Built-in networks
 
-| Chain | Export |
+| Network | Export |
 |-------|--------|
 | Paseo Asset Hub | `PASEO_ASSET_HUB` |
 | Previewnet | `PREVIEWNET` |
@@ -373,14 +373,14 @@ The build produces three outputs:
 
 ## Migrating from 0.1.x to 0.2.x
 
-The env file utilities (`loadChainFromEnv`, `parseEnvFile`, `loadEnvFiles`) have been removed. If you used them, construct a `ChainConfig` directly:
+The env file utilities (`loadChainFromEnv`, `parseEnvFile`, `loadEnvFiles`) have been removed. If you used them, construct a `NetworkConfig` directly:
 
 ```diff
 -import { createTestHostServer, loadChainFromEnv } from "@parity/host-api-test-sdk";
 -const chain = loadChainFromEnv({ envFiles: [".env.local"], ... });
 +import { createTestHostServer } from "@parity/host-api-test-sdk";
-+import type { ChainConfig } from "@parity/host-api-test-sdk";
-+const chain: ChainConfig = {
++import type { NetworkConfig } from "@parity/host-api-test-sdk";
++const network: NetworkConfig = {
 +  id: "local-asset-hub",
 +  name: "Local Asset Hub",
 +  genesisHash: process.env.GENESIS_HASH as `0x${string}`,
@@ -390,7 +390,7 @@ The env file utilities (`loadChainFromEnv`, `parseEnvFile`, `loadEnvFiles`) have
 +};
 ```
 
-If you only used built-in chains (`PASEO_ASSET_HUB`, etc.) and `createTestHostFixture` — no changes needed.
+If you only used built-in networks (`PASEO_ASSET_HUB`, etc.) and `createTestHostFixture` — no changes needed.
 
 ## Security
 
