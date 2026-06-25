@@ -356,7 +356,7 @@ src/
 ├── types.ts                  # Shared type definitions
 ├── server.ts                 # Node HTTP server
 ├── accounts.ts               # Dev account definitions
-├── chains.ts                 # Built-in chain configs
+├── networks.ts               # Built-in network configs
 ├── host-page.ts              # HTML page generation
 ├── browser/
 │   └── host-runtime.ts       # Browser runtime (bundled into IIFE)

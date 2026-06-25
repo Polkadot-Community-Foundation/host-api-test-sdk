@@ -6,10 +6,10 @@ export {
   PREVIEWNET,
   PREVIEWNET_ASSET_HUB,
   SUPPORTED_CHAINS,
-} from './chains.js';
+} from './networks.js';
 export type {
   Account,
-  ChainConfig,
+  NetworkConfig,
   CreateTestHostOptions,
   DevAccountInfo,
   DevAccountName,

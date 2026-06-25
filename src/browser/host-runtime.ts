@@ -33,7 +33,11 @@ import { Keyring } from "@polkadot/keyring";
 import type { KeyringPair } from "@polkadot/keyring/types";
 import { TypeRegistry } from "@polkadot/types";
 import { compactToU8a, u8aToHex } from "@polkadot/util";
-import { blake2AsHex, blake2AsU8a, cryptoWaitReady } from "@polkadot/util-crypto";
+import {
+  blake2AsHex,
+  blake2AsU8a,
+  cryptoWaitReady,
+} from "@polkadot/util-crypto";
 import { ResultAsync } from "neverthrow";
 import { getWsProvider } from "polkadot-api/ws";
 
@@ -57,8 +61,6 @@ import type {
   ThemeInput,
 } from "../types.js";
 
-// ── Types ──────────────────────────────────────────────────────────
-
 interface AccountConfig {
   name: string;
   uri: string;
@@ -73,12 +75,11 @@ interface ChainRuntimeConfig {
 interface HostConfig {
   productUrl: string;
   accounts: AccountConfig[];
-  chain: ChainRuntimeConfig;
+  /** Networks the host can route, matched by genesis. First is the default. */
+  networks: ChainRuntimeConfig[];
   /** Maps "dotnsId/index" → { name, uri } for product account overrides. */
   productAccounts?: Record<string, AccountConfig>;
 }
-
-// ── Globals ────────────────────────────────────────────────────────
 
 declare global {
   interface Window {
@@ -86,8 +87,6 @@ declare global {
     __TEST_HOST__: TestHostAPI;
   }
 }
-
-// ── State ──────────────────────────────────────────────────────────
 
 const signingLog: SigningLogEntry[] = [];
 const permissionLog: PermissionLogEntry[] = [];
@@ -110,7 +109,10 @@ const preimageSubscribers = new Map<string, Set<(value: any) => void>>();
 const statementStore: unknown[] = [];
 const submittedStatements: StatementSubmissionLogEntry[] = [];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const statementSubscribers = new Set<{ filter: { tag: string; value: Uint8Array[] }; send: (s: any) => void }>();
+const statementSubscribers = new Set<{
+  filter: { tag: string; value: Uint8Array[] };
+  send: (s: any) => void;
+}>();
 const paymentLog: PaymentLogEntry[] = [];
 let paymentBalance: bigint = 0n;
 let paymentTopUpBehavior: PaymentTopUpBehavior = "ok";
@@ -147,8 +149,6 @@ let keyring: Keyring;
 const pairsByUri = new Map<string, KeyringPair>();
 const urisByPair = new Map<KeyringPair, string>();
 
-// ── Constants ─────────────────────────────────────────────────────
-
 /** Maps host-api device permission names to Permissions Policy directives (matching dot.li). */
 const DEVICE_PERMISSION_POLICY: Record<string, string> = {
   Camera: "camera",
@@ -159,8 +159,6 @@ const DEVICE_PERMISSION_POLICY: Record<string, string> = {
   Clipboard: "clipboard-read",
   Biometrics: "publickey-credentials-get",
 };
-
-// ── Helpers ────────────────────────────────────────────────────────
 
 /** Normalize a genesis hash for comparison — handles different types and casing */
 function normalizeHash(value: unknown): string {
@@ -205,7 +203,10 @@ function getPairByPublicKey(pubkey: Uint8Array): KeyringPair | undefined {
 function buildSignedV4Extrinsic(
   pair: KeyringPair,
   callData: Uint8Array,
-  extensions: ReadonlyArray<{ extra: Uint8Array; additionalSigned: Uint8Array }>,
+  extensions: ReadonlyArray<{
+    extra: Uint8Array;
+    additionalSigned: Uint8Array;
+  }>,
 ): Uint8Array {
   let extrasLen = 0;
   let addlLen = 0;
@@ -216,11 +217,19 @@ function buildSignedV4Extrinsic(
   const extras = new Uint8Array(extrasLen);
   const addls = new Uint8Array(addlLen);
   let o = 0;
-  for (const e of extensions) { extras.set(e.extra, o); o += e.extra.length; }
+  for (const e of extensions) {
+    extras.set(e.extra, o);
+    o += e.extra.length;
+  }
   o = 0;
-  for (const e of extensions) { addls.set(e.additionalSigned, o); o += e.additionalSigned.length; }
+  for (const e of extensions) {
+    addls.set(e.additionalSigned, o);
+    o += e.additionalSigned.length;
+  }
 
-  const payload = new Uint8Array(callData.length + extras.length + addls.length);
+  const payload = new Uint8Array(
+    callData.length + extras.length + addls.length,
+  );
   payload.set(callData, 0);
   payload.set(extras, callData.length);
   payload.set(addls, callData.length + extras.length);
@@ -228,12 +237,19 @@ function buildSignedV4Extrinsic(
   const toSign = payload.length > 256 ? blake2AsU8a(payload, 256) : payload;
   const signature = pair.sign(toSign); // sr25519, 64 bytes
 
-  const inner = new Uint8Array(1 + 1 + 32 + 1 + 64 + extras.length + callData.length);
+  const inner = new Uint8Array(
+    1 + 1 + 32 + 1 + 64 + extras.length + callData.length,
+  );
   let p = 0;
   inner[p++] = 0x84;
-  inner[p++] = 0x00; inner.set(pair.publicKey, p); p += 32;
-  inner[p++] = 0x01; inner.set(signature, p); p += 64;
-  inner.set(extras, p); p += extras.length;
+  inner[p++] = 0x00;
+  inner.set(pair.publicKey, p);
+  p += 32;
+  inner[p++] = 0x01;
+  inner.set(signature, p);
+  p += 64;
+  inner.set(extras, p);
+  p += extras.length;
   inner.set(callData, p);
 
   const lenPrefix = compactToU8a(inner.length);
@@ -298,13 +314,13 @@ function buildAllowAttribute(): string {
 
 /** Update the product iframe's `allow` attribute from current granted device permissions. */
 function updateIframeAllow(): void {
-  const iframeEl = document.getElementById("product-frame") as HTMLIFrameElement;
+  const iframeEl = document.getElementById(
+    "product-frame",
+  ) as HTMLIFrameElement;
   if (iframeEl) {
     iframeEl.allow = buildAllowAttribute();
   }
 }
-
-// ── Container setup ────────────────────────────────────────────────
 
 function setupContainer(
   iframe: HTMLIFrameElement,
@@ -354,27 +370,30 @@ function setupContainer(
     }
   }
 
-  // ── Feature support ──────────────────────────────────────────
+  // Every network the host can route, matched by genesis. Apps that read more
+  // than one chain (e.g. Asset Hub + People) need each genesis to resolve.
+  const routableChains = config.networks;
+  const findChain = (genesis: unknown): ChainRuntimeConfig | undefined => {
+    const requested = normalizeHash(genesis);
+    return routableChains.find(
+      (c) => normalizeHash(c.genesisHash) === requested,
+    );
+  };
 
   container.handleFeatureSupported((params, { ok }) => {
     if (params.tag === "Chain") {
-      const requested = normalizeHash(params.value);
-      const configured = normalizeHash(config.chain.genesisHash);
-      const supported = requested === configured;
-      if (!supported) {
+      const match = findChain(params.value);
+      if (!match) {
         console.warn(
           `[test-host] Chain feature check MISMATCH:\n` +
             `  requested: ${String(params.value)} (type: ${typeof params.value})\n` +
-            `  configured: ${config.chain.genesisHash}\n` +
-            `  normalized: ${requested} vs ${configured}`,
+            `  routable: ${routableChains.map((c) => c.genesisHash).join(", ")}`,
         );
       }
-      return ok(supported);
+      return ok(!!match);
     }
     return ok(false);
   });
-
-  // ── Permissions ─────────────────────────────────────────────
 
   container.handlePermission((params, { ok }) => {
     // params is a single RemotePermission { tag, value }
@@ -405,7 +424,6 @@ function setupContainer(
     return ok(approved);
   });
 
-  // ── Device permissions ─────────────────────────────────────────
   // Matches real host behavior: product must request device permissions
   // (Camera, Microphone, Location, Bluetooth). When granted, the iframe
   // `allow` attribute is updated and the iframe reloads (matching dot.li).
@@ -446,30 +464,30 @@ function setupContainer(
     return ok(approved);
   });
 
-  // ── Chain connection ─────────────────────────────────────────
-
   chainStatus = "idle";
-  const chainProvider = getWsProvider(config.chain.rpcUrl);
+  // One ws provider per routable network, created lazily on first connection
+  // and keyed by normalized genesis so multiple chains coexist.
+  const providerByGenesis = new Map<string, ReturnType<typeof getWsProvider>>();
 
   container.handleChainConnection((requestedGenesisHash) => {
-    const requested = normalizeHash(requestedGenesisHash);
-    const configured = normalizeHash(config.chain.genesisHash);
-    if (requested === configured) {
-      chainStatus = "connected";
-      console.log(
-        "[test-host] Chain connection established for",
-        config.chain.name,
+    const match = findChain(requestedGenesisHash);
+    if (!match) {
+      console.warn(
+        "[test-host] Unsupported chain requested:",
+        requestedGenesisHash,
       );
-      return chainProvider;
+      return null;
     }
-    console.warn(
-      "[test-host] Unsupported chain requested:",
-      requestedGenesisHash,
-    );
-    return null;
+    const key = normalizeHash(match.genesisHash);
+    let provider = providerByGenesis.get(key);
+    if (!provider) {
+      provider = getWsProvider(match.rpcUrl);
+      providerByGenesis.set(key, provider);
+    }
+    chainStatus = "connected";
+    console.log("[test-host] Chain connection established for", match.name);
+    return provider;
   });
-
-  // ── Accounts ─────────────────────────────────────────────────
 
   container.handleGetLegacyAccounts((_, { ok }) => {
     return ok(
@@ -537,7 +555,10 @@ function setupContainer(
 
     // Deterministic 32-byte context and alias from the account's public key.
     const context = blake2AsU8a(
-      new Uint8Array([...pair.publicKey, ...new TextEncoder().encode("context")]),
+      new Uint8Array([
+        ...pair.publicKey,
+        ...new TextEncoder().encode("context"),
+      ]),
       256,
     );
     const alias = blake2AsU8a(
@@ -556,8 +577,6 @@ function setupContainer(
     return ok(signature);
   });
 
-  // ── Create transaction (product account) ────────────────────
-
   container.handleCreateTransaction((params, { ok, err }) => {
     const [dotnsId, idx] = params.signer;
     const pair = getPairForProductAccount(config, pairs, dotnsId, idx);
@@ -568,11 +587,13 @@ function setupContainer(
         }),
       );
     }
-    signingLog.push({ type: "createTransaction", payload: params, timestamp: Date.now() });
+    signingLog.push({
+      type: "createTransaction",
+      payload: params,
+      timestamp: Date.now(),
+    });
     return ok(buildSignedV4Extrinsic(pair, params.callData, params.extensions));
   });
-
-  // ── Sign payload (extrinsic) ─────────────────────────────────
 
   container.handleSignPayload((params, { ok, err }) => {
     // params.account is [dotnsId, derivationIndex]
@@ -616,8 +637,6 @@ function setupContainer(
     );
   });
 
-  // ── Sign raw ─────────────────────────────────────────────────
-
   container.handleSignRaw((params, { ok, err }) => {
     // params.account is [dotnsId, derivationIndex]
     const [dotnsId, idx] = params.account;
@@ -646,8 +665,6 @@ function setupContainer(
     });
   });
 
-  // ── Sign with legacy account (address-based) ───────────────
-
   container.handleSignPayloadWithLegacyAccount((params, { ok, err }) => {
     const pair = getPairByAddress(params.signer);
     if (!pair) {
@@ -658,7 +675,11 @@ function setupContainer(
       );
     }
 
-    signingLog.push({ type: "payload", payload: params, timestamp: Date.now() });
+    signingLog.push({
+      type: "payload",
+      payload: params,
+      timestamp: Date.now(),
+    });
 
     return ResultAsync.fromPromise(
       (async () => {
@@ -708,8 +729,6 @@ function setupContainer(
     });
   });
 
-  // ── Create transaction with legacy account ──────────────────
-
   container.handleCreateTransactionWithLegacyAccount((params, { ok, err }) => {
     const pair = getPairByPublicKey(params.signer);
     if (!pair) {
@@ -719,11 +738,13 @@ function setupContainer(
         }),
       );
     }
-    signingLog.push({ type: "createTransaction", payload: params, timestamp: Date.now() });
+    signingLog.push({
+      type: "createTransaction",
+      payload: params,
+      timestamp: Date.now(),
+    });
     return ok(buildSignedV4Extrinsic(pair, params.callData, params.extensions));
   });
-
-  // ── Local storage (scoped per test) ──────────────────────────
 
   container.handleLocalStorageRead((key, { ok }) => {
     const storageKey = `test-host:${key}`;
@@ -743,7 +764,6 @@ function setupContainer(
     return ok(undefined);
   });
 
-  // ── Navigation ───────────────────────────────────────────────
   // Real hosts parse dot.li URLs and route within the app or open externally.
   // The test host records intents so tests can assert what the product tried
   // to navigate to, without actually navigating.
@@ -757,7 +777,6 @@ function setupContainer(
     return ok(undefined);
   });
 
-  // ── Push notifications ───────────────────────────────────────
   // Real hosts surface system notifications with optional deeplink click handlers.
   // The test host records notifications so tests can assert what was sent.
 
@@ -776,7 +795,9 @@ function setupContainer(
       `#${id}`,
       params.text,
       params.deeplink ? `(deeplink: ${params.deeplink})` : "",
-      params.scheduledAt !== undefined ? `(scheduledAt: ${params.scheduledAt})` : "",
+      params.scheduledAt !== undefined
+        ? `(scheduledAt: ${params.scheduledAt})`
+        : "",
     );
     return ok(id);
   });
@@ -784,13 +805,14 @@ function setupContainer(
   container.handlePushNotificationCancel((id, { ok, err }) => {
     const entry = notificationLog.find((e) => e.id === id);
     if (!entry) {
-      return err(new GenericError({ reason: `Notification id not found: ${id}` }));
+      return err(
+        new GenericError({ reason: `Notification id not found: ${id}` }),
+      );
     }
     entry.cancelled = true;
     return ok(undefined);
   });
 
-  // ── Chat ─────────────────────────────────────────────────────
   // In-memory chat implementation: tracks product-created rooms and bots,
   // logs posted messages, and allows tests to inject incoming actions
   // through `injectChatAction`. Real hosts back these via Matrix.
@@ -864,7 +886,6 @@ function setupContainer(
     };
   });
 
-  // ── Preimage store ───────────────────────────────────────────
   // In-memory preimage storage. Key = blake2b-256(value), matching how
   // preimages are identified on Polkadot. Real hosts submit via Bulletin
   // chain + fetch via IPFS; this is a simple lookup table.
@@ -914,7 +935,6 @@ function setupContainer(
     }
   });
 
-  // ── Statement store ──────────────────────────────────────────
   // In-memory statement storage. Topics are Uint8Array[]; a statement
   // matches a subscription if the subscription topics are a subset of the
   // statement's topics (simple filter). Real hosts back this via the
@@ -929,14 +949,10 @@ function setupContainer(
       if (!stmt.topics) return false;
       const stmtTopicsHex = stmt.topics.map((t) => u8aToHex(t));
       if (topicFilter.tag === "MatchAll") {
-        return filterTopics.every((ft) =>
-          stmtTopicsHex.includes(u8aToHex(ft)),
-        );
+        return filterTopics.every((ft) => stmtTopicsHex.includes(u8aToHex(ft)));
       }
       // MatchAny
-      return filterTopics.some((ft) =>
-        stmtTopicsHex.includes(u8aToHex(ft)),
-      );
+      return filterTopics.some((ft) => stmtTopicsHex.includes(u8aToHex(ft)));
     };
 
     // Send as SignedStatementsPage { statements, isComplete }
@@ -1013,7 +1029,9 @@ function setupContainer(
       if (filterTopics.length === 0) {
         matches = true;
       } else if (sub.filter.tag === "MatchAll") {
-        matches = filterTopics.every((t) => stmtTopicsHex.includes(u8aToHex(t)));
+        matches = filterTopics.every((t) =>
+          stmtTopicsHex.includes(u8aToHex(t)),
+        );
       } else {
         matches = filterTopics.some((t) => stmtTopicsHex.includes(u8aToHex(t)));
       }
@@ -1023,8 +1041,6 @@ function setupContainer(
     return ok(undefined);
   });
 
-  // ── Theme ────────────────────────────────────────────────────
-
   container.handleThemeSubscribe((_, send) => {
     send(currentTheme);
     themeSubscribers.add(send);
@@ -1033,8 +1049,6 @@ function setupContainer(
     };
   });
 
-  // ── Entropy derivation (RFC-0007) ───────────────────────────
-
   container.handleDeriveEntropy((key, { ok, err }) => {
     try {
       // Use the first account's mini-secret as the root entropy source.
@@ -1042,19 +1056,23 @@ function setupContainer(
       // account's raw seed (which is stable for dev accounts).
       const rootPair = pairs[0]?.pair;
       if (!rootPair) {
-        return err(new DeriveEntropyErr.Unknown({ reason: "No accounts available" }));
+        return err(
+          new DeriveEntropyErr.Unknown({ reason: "No accounts available" }),
+        );
       }
       // Use the public key as a stable stand-in for root account secret
       // (real hosts use BIP-39 entropy, but test dev accounts don't have it)
-      const entropy = deriveProductEntropy(rootPair.publicKey, "test-product", key);
+      const entropy = deriveProductEntropy(
+        rootPair.publicKey,
+        "test-product",
+        key,
+      );
       return ok(entropy);
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
       return err(new DeriveEntropyErr.Unknown({ reason }));
     }
   });
-
-  // ── User identity (RFC-0014, replaces RFC-0010 accountGetRoot) ──
 
   container.handleGetUserId((_, { ok, err }) => {
     if (!isAuthenticated) {
@@ -1068,8 +1086,6 @@ function setupContainer(
       primaryUsername: pairs[0].name ?? "alice",
     });
   });
-
-  // ── Login (RFC-0009) ────────────────────────────────────────
 
   container.handleRequestLogin((reason, { ok, err }) => {
     if (isAuthenticated) {
@@ -1093,8 +1109,6 @@ function setupContainer(
 
     return ok(result as never);
   });
-
-  // ── Payments (RFC-0006) ─────────────────────────────────────
 
   container.handlePaymentBalanceSubscribe((_, send) => {
     send({ available: paymentBalance });
@@ -1127,7 +1141,9 @@ function setupContainer(
     }
     if (behavior.type === "partial") {
       credit(behavior.credited);
-      return err(new PaymentTopUpErr.PartialPayment({ credited: behavior.credited }));
+      return err(
+        new PaymentTopUpErr.PartialPayment({ credited: behavior.credited }),
+      );
     }
     // behavior.type === 'reject'
     if (behavior.reason === "InvalidSource") {
@@ -1189,8 +1205,6 @@ function setupContainer(
     };
   });
 
-  // ── Resource allocation (RFC-0010) ───────────────────────────
-
   container.handleRequestResourceAllocation((resources, { ok }) => {
     // Auto-allocate all requested resources for test purposes
     const outcomes = resources.map(() => ({
@@ -1200,16 +1214,12 @@ function setupContainer(
     return ok(outcomes);
   });
 
-  // ── Connection status ────────────────────────────────────────
-
   container.subscribeProductConnectionStatus((status) => {
     connectionStatus = status;
   });
 
   return container;
 }
-
-// ── Init ───────────────────────────────────────────────────────────
 
 async function init(): Promise<void> {
   const config = window.__TEST_HOST_CONFIG__;
@@ -1234,8 +1244,6 @@ async function init(): Promise<void> {
     window.location.pathname + window.location.search + window.location.hash,
     config.productUrl,
   ).href;
-
-  // ── Control API for Playwright ─────────────────────────────
 
   window.__TEST_HOST__ = {
     async switchAccount(name: string) {
@@ -1346,7 +1354,11 @@ async function init(): Promise<void> {
       chatMessageCounter = 0;
     },
 
-    injectChatAction(action: { roomId: string; peer: string; payload: unknown }) {
+    injectChatAction(action: {
+      roomId: string;
+      peer: string;
+      payload: unknown;
+    }) {
       for (const subscriber of chatActionSubscribers) {
         subscriber(action);
       }
@@ -1389,9 +1401,13 @@ async function init(): Promise<void> {
         if (filterTopics.length === 0) {
           matches = true;
         } else if (sub.filter.tag === "MatchAll") {
-          matches = filterTopics.every((t) => stmtTopicsHex.includes(u8aToHex(t)));
+          matches = filterTopics.every((t) =>
+            stmtTopicsHex.includes(u8aToHex(t)),
+          );
         } else {
-          matches = filterTopics.some((t) => stmtTopicsHex.includes(u8aToHex(t)));
+          matches = filterTopics.some((t) =>
+            stmtTopicsHex.includes(u8aToHex(t)),
+          );
         }
         if (matches) sub.send(statement as never);
       }
@@ -1401,8 +1417,6 @@ async function init(): Promise<void> {
       statementStore.length = 0;
       submittedStatements.length = 0;
     },
-
-    // ── Theme control ──────────────────────────────────────────
 
     getTheme() {
       return currentTheme;
@@ -1414,8 +1428,6 @@ async function init(): Promise<void> {
         sub(currentTheme);
       }
     },
-
-    // ── Login / auth control ───────────────────────────────────
 
     setLoginBehavior(behavior: LoginBehavior) {
       loginBehavior = behavior;
@@ -1432,8 +1444,6 @@ async function init(): Promise<void> {
     simulateReconnect() {
       isAuthenticated = true;
     },
-
-    // ── Payment control ────────────────────────────────────────
 
     setPaymentBalance(amount: bigint) {
       paymentBalance = amount;
@@ -1454,7 +1464,10 @@ async function init(): Promise<void> {
       paymentTopUpBehavior = behavior;
     },
 
-    simulatePaymentStatus(paymentId: string, status: { tag: string; value?: string }) {
+    simulatePaymentStatus(
+      paymentId: string,
+      status: { tag: string; value?: string },
+    ) {
       paymentStatuses.set(paymentId, status);
       const subs = paymentStatusSubscribers.get(paymentId);
       if (subs) {
@@ -1472,11 +1485,10 @@ async function init(): Promise<void> {
 
   console.log(
     "[test-host] Initialized:",
-    "\n  chain:",
-    config.chain.name,
-    "(" + config.chain.genesisHash.slice(0, 18) + "...)",
-    "\n  rpc:",
-    config.chain.rpcUrl,
+    "\n  networks:",
+    config.networks
+      .map((n) => `${n.name} (${n.genesisHash.slice(0, 18)}...) ${n.rpcUrl}`)
+      .join("\n            "),
     "\n  accounts:",
     config.accounts.map((a) => a.name).join(", "),
   );

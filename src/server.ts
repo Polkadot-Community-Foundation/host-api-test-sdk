@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import { generateHostPage } from './host-page.js';
-import { DEFAULT_CHAIN } from './chains.js';
+import { DEFAULT_CHAIN } from './networks.js';
 import type { CreateTestHostOptions, TestHostServer } from './types.js';
 
 export async function createTestHostServer(
@@ -9,14 +9,14 @@ export async function createTestHostServer(
   const {
     productUrl,
     accounts = ['alice'],
-    chain = DEFAULT_CHAIN,
+    networks = [DEFAULT_CHAIN],
     port = 0,
   } = options;
 
   const html = generateHostPage({
     productUrl,
     accounts,
-    chain,
+    networks,
     productAccounts: options.productAccounts,
   });
 

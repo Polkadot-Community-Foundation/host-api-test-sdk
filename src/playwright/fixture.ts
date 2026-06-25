@@ -1,6 +1,6 @@
 import type { Page, FrameLocator } from '@playwright/test';
 import { createTestHostServer } from '../server.js';
-import { DEFAULT_CHAIN } from '../chains.js';
+import { DEFAULT_CHAIN } from '../networks.js';
 import type { ChatBot, ChatMessageLogEntry, ChatRoom, CreateTestHostOptions, DevAccountName, HexString, LoginBehavior, NavigationLogEntry, NotificationLogEntry, PaymentLogEntry, PaymentTopUpBehavior, PermissionBehavior, PermissionLogEntry, PreimageEntry, SigningLogEntry, StatementSubmissionLogEntry, TestHostAPI, Theme, ThemeInput } from '../types.js';
 
 export interface TestHost {
@@ -143,8 +143,8 @@ export interface TestHostFixtureOptions {
   productUrl: string;
   /** Initial accounts — dev names or custom { name, uri } (default: ['alice']) */
   accounts?: CreateTestHostOptions['accounts'];
-  /** Chain config (default: PASEO_ASSET_HUB) */
-  chain?: CreateTestHostOptions['chain'];
+  /** Networks the host can route (default: [PASEO_ASSET_HUB]) */
+  networks?: CreateTestHostOptions['networks'];
   /** Map product account requests to specific accounts (see CreateTestHostOptions.productAccounts) */
   productAccounts?: CreateTestHostOptions['productAccounts'];
 }
@@ -155,7 +155,7 @@ export function createTestHostFixture(defaults: TestHostFixtureOptions) {
       const server = await createTestHostServer({
         productUrl: defaults.productUrl,
         accounts: defaults.accounts ?? ['alice'],
-        chain: defaults.chain ?? DEFAULT_CHAIN,
+        networks: defaults.networks ?? [DEFAULT_CHAIN],
         productAccounts: defaults.productAccounts,
       });
 
