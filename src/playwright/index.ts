@@ -5,7 +5,7 @@ export type { TestHost, TestHostFixtureOptions } from './fixture.js';
 // don't need to import from two separate paths.
 export type {
   Account,
-  ChainConfig,
+  NetworkConfig,
   DevAccountInfo,
   DevAccountName,
   HexString,
@@ -18,4 +18,4 @@ export {
   PASEO_ASSET_HUB,
   PREVIEWNET,
   PREVIEWNET_ASSET_HUB,
-} from '../chains.js';
+} from '../networks.js';

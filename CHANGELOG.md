@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.10.0
+
+### Breaking changes
+
+- **The `chain` host option is replaced by `networks`, an array.** `createTestHostServer` / `createTestHostFixture` now take `networks: NetworkConfig[]` instead of `chain: ChainConfig`. The host routes each connection request to the matching network by genesis hash, and the first entry is the default. Migration: wrap your existing value — `chain: PASEO_ASSET_HUB` → `networks: [PASEO_ASSET_HUB]`. The option is optional and still defaults to `[PASEO_ASSET_HUB]`.
+- **`ChainConfig` renamed to `NetworkConfig`.** The shape is unchanged (`id`, `name`, `genesisHash`, `rpcUrl`, `tokenSymbol`, `tokenDecimals`); only the type name changed. Update type imports accordingly.
+
+### Added
+
+- **Multi-network routing.** The host can now be configured with several networks at once and serves a per-genesis WebSocket provider on demand, so a product that switches genesis mid-session connects to the right RPC instead of being rejected. Unknown genesis hashes are reported as `Unsupported chain requested` against the full routable list.
+
+### Internal
+
+- Renamed `src/chains.ts` to `src/networks.ts` and updated all imports/exports.
+- Removed decorative section-separator comment banners from `host-runtime.ts` and `types.ts`.
+
 ## 0.9.2
 
 ### Changed
